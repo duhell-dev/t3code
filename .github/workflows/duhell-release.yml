@@ -299,10 +299,11 @@ jobs:
           sparse-checkout: DUHELL.md
           sparse-checkout-cone-mode: false
 
-      # Das Standard-Token darf keinen Tag auf einen Commit setzen, der
-      # .github/workflows ändert (403 "Resource not accessible by integration").
-      # Dann zeigt der Tag auf einen leeren Hilfs-Commit: gleicher Baum wie der
-      # gebaute Commit, dieser als Elternteil, also keine Workflow-Änderung.
+      # `gh release create --target <sha>` (Release legt den Tag selbst an) bekam
+      # mit dem Standard-Token 403 "Resource not accessible by integration"
+      # (Lauf 43004071962). Daher den Tag zuerst über git/refs anlegen und das
+      # Release danach mit --verify-tag. Wird auch das abgelehnt, zeigt der Tag
+      # auf einen leeren Hilfs-Commit (gleicher Baum, gebauter Commit als Elternteil).
       - name: Tag anlegen
         shell: bash
         run: |
