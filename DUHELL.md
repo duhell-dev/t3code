@@ -22,6 +22,9 @@ Unsere Änderungen am Code des Originals:
 - `packages/shared/src/cliRelease.ts:6`: `CLI_RELEASE_REPOSITORY = "duhell-dev/t3code"`.
   Davon hängen Release-Liste, Download-URL und `SHA256SUMS` des Updaters ab.
 
+Sonst nichts. Insbesondere meldet T3 Claude-Prozesse wie im Original als
+`CLAUDE_CODE_ENTRYPOINT=t3-code` (`apps/server/src/provider/Drivers/ClaudeHome.ts`).
+
 ## Eine Änderung machen
 
 1. Auf `duhell` committen und pushen (direkt oder per Pull Request nach `duhell`).
@@ -196,38 +199,31 @@ systemctl --user list-timers | grep -i t3     # eigenes Auto-Update? dann abscha
 
 Zurück wie oben, als derselbe Benutzer.
 
-**Windows-PC mit T3-Desktop-App** (CLI unter `C:\Users\<name>\.t3\bin\t3.cmd`)
+**Windows-PC mit T3-Desktop-App** (Nepo)
 
-Die Desktop-App hat einen **eigenen Update-Weg**: Sie aktualisiert sich als
-Installer über den Electron-Updater aus den Releases des Originals. Dieser Fork
-baut keine Desktop-Installer. `…\.t3\bin\t3.cmd` ist ein Shim, den die App
-schreibt; er startet die **in der App gebündelte** CLI (Electron als Node), keine
-Runtime aus `runtime\versions`. Ein `t3 update` darüber ändert an der App nichts.
-Unter Windows gibt es außerdem keinen T3-Dienst (`t3 service install` kennt nur
-systemd und launchd).
+Seit 11.11.2026 baut jedes Fork-Release auch den Windows-Installer (NSIS, x64, die
+`.exe` im Release, App „T3 Code (Nightly)“) samt `nightly.yml` für den Electron-Updater. Weil er in
+`duhell-dev/t3code` gebaut wird, zeigt sein Update-Feed auf diesen Fork
+(`scripts/build-desktop-artifact.ts`, `GITHUB_REPOSITORY`). Der Server in der App
+ist derselbe Fork-Code, `t3 update` und „Alles aktualisieren“ holen also auch
+aus dem Fork.
 
-Was das für diesen Rechner heißt:
+Umstellen (einmalig, am Windows-PC):
 
-- Die Desktop-App bleibt ein Original-Bau und aktualisiert sich weiter vom
-  Original. Als Client für die Fork-Server auf pc1 und pc2 funktioniert sie.
-- Ihr Knopf „Alles aktualisieren“ will verbundene Server auf die Version der App
-  ziehen. Bei Fork-Servern schlägt das ungefährlich fehl („No release archive was
-  published for t3@…“), der Server bleibt, wie er ist.
-- Ein eigener Fork-**Server** auf diesem PC geht nur von Hand und ohne
-  automatischen Neustart nach Updates. Das ist nicht empfohlen. Wer es trotzdem will (PowerShell):
+1. T3 Code beenden (Tray-Symbol → Quit).
+2. Neuestes Release unter <https://github.com/duhell-dev/t3code/releases> öffnen,
+   die `.exe` laden und starten. Der Installer ersetzt die
+   Original-App an derselben Stelle, Einstellungen, Threads und Kopplungen bleiben.
+3. SmartScreen warnt, weil der Bau nicht signiert ist: „Weitere Informationen“ →
+   „Trotzdem ausführen“.
+4. Prüfen: Settings → About zeigt eine Version mit siebenstelliger letzter Zahl.
 
-  ```powershell
-  $env:T3CODE_RELEASE_BASE_URL = "https://github.com/duhell-dev/t3code/releases/download"
-  $env:T3CODE_VERSION = "<Fork-Version>"
-  irm https://raw.githubusercontent.com/duhell-dev/t3code/duhell/scripts/install.ps1 | iex
-  & "$HOME\.local\bin\t3.exe" --version    # Prüfen: siebenstellige letzte Zahl
-  & "$HOME\.local\bin\t3.exe" serve         # startet den Server im Vordergrund
-  ```
+Danach holt der Update-Knopf der App nur noch Fork-Releases. Fehlt in einem
+Release der Installer (Desktop-Bau gescheitert), meldet der Updater einen Fehler
+und bleibt auf seiner Version, bis das nächste Release ihn wieder enthält.
 
-  Das Installskript legt `t3.exe` nach `~\.local\bin`, der Shim der App liegt in
-  `~\.t3\bin`. Wer in `PATH` zuerst steht, ist „`t3`“. Zurück: den Ordner
-  `~\.t3\runtime\versions\<Fork-Version>` und `~\.local\bin\t3.exe` löschen; die App
-  ist davon nicht berührt.
+Zurück: Original-Installer von <https://github.com/pingdotgg/t3code/releases>
+installieren (gleicher Weg, Daten bleiben).
 
 ## Wer ein Release auslösen kann
 
@@ -287,6 +283,11 @@ Abhilfe, einmalig:
    `github.com/organizations/duhell-dev/settings/personal-access-token-requests`
    freigeben.
 8. Actions → „Sync upstream“ → **Run workflow**.
+
+Achtung: Issues sind in diesem Repository abgeschaltet. Dann kann der Abgleich
+das Issue nicht anlegen, und der Lauf endet nur rot unter Actions → „Sync upstream“
+(so am 11.11.2026). Ohne Token muss jemand mit Workflow-Recht von Hand mergen
+(siehe „Sync-Konflikt“, dort zusätzlich `git push origin upstream/main:main`).
 
 Mit gesetztem `SYNC_TOKEN` pusht der Abgleich damit; der Push auf `duhell`
 startet das Release dann von selbst. Läuft das Token ab, erscheint wieder das Issue.
