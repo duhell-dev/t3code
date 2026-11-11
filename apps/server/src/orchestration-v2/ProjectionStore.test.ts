@@ -6232,6 +6232,57 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
     }),
   );
 
+  it.effect("lists threads that failed for an account cause for provider failover", () =>
+    Effect.gen(function* () {
+      const store = yield* ProjectionStore.ProjectionStoreV2;
+      const threadId = yield* addRolledBackRecoveryCandidate("failover-billing");
+      const otherThreadId = yield* addRolledBackRecoveryCandidate("failover-other");
+      const now = yield* DateTime.now;
+      const errorItem = (target: typeof threadId, code: string) =>
+        Effect.gen(function* () {
+          const run = (yield* store.getThreadProjection(target)).runs[0]!;
+          yield* store.apply({
+            id: EventId.make(`event:failover:${target}:error`),
+            type: "turn-item.updated",
+            threadId: target,
+            runId: run.id,
+            occurredAt: now,
+            payload: {
+              id: TurnItemId.make(`${target}:failover-error`),
+              threadId: target,
+              runId: run.id,
+              nodeId: run.rootNodeId,
+              providerThreadId: null,
+              providerTurnId: null,
+              nativeItemRef: null,
+              parentItemId: null,
+              ordinal: 2,
+              status: "failed" as const,
+              title: "Error",
+              startedAt: now,
+              completedAt: now,
+              updatedAt: now,
+              type: "error" as const,
+              failure: {
+                class: "provider_error" as const,
+                message: "Credit balance is too low",
+                code,
+                retryable: null,
+              },
+            },
+          });
+        });
+      yield* errorItem(threadId, "billing_error");
+      yield* errorItem(otherThreadId, "api_error_529");
+      const since = DateTime.makeUnsafe(DateTime.toEpochMillis(now) - 60_000);
+      const ids = yield* store.getProviderFailoverThreadIds(since);
+      assert.include(ids, threadId);
+      assert.notInclude(ids, otherThreadId);
+      const later = DateTime.makeUnsafe(DateTime.toEpochMillis(now) + 60_000);
+      assert.notInclude(yield* store.getProviderFailoverThreadIds(later), threadId);
+    }),
+  );
+
   it.effect("projects only the latest failed root turn's limit into SQL and memory shells", () =>
     Effect.gen(function* () {
       const store = yield* ProjectionStore.ProjectionStoreV2;

@@ -561,6 +561,10 @@ export interface ProjectionStoreV2Shape {
     readonly snooze: boolean;
   }) => Effect.Effect<ReadonlyArray<ProjectionLimitRecoveryCandidate>, ProjectionStoreV2Error>;
   /** Epoch ms of the next armed reset or snooze end after `now`, when a waiting thread becomes a candidate. */
+  /** duHell fork: threads a provider failover may act on (failed for an account cause, or moved by failover) since `since`. */
+  readonly getProviderFailoverThreadIds: (
+    since: DateTime.Utc,
+  ) => Effect.Effect<ReadonlyArray<ThreadId>, ProjectionStoreV2Error>;
   readonly getLimitRecoveryWakeAt: (
     now: DateTime.Utc,
   ) => Effect.Effect<number | null, ProjectionStoreV2Error>;
@@ -4310,6 +4314,33 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       Effect.mapError((cause) => new ProjectionStoreSetupError({ cause })),
     );
 
+    const getProviderFailoverThreadIds = Effect.fn("ProjectionStore.getProviderFailoverThreadIds")(
+      function* (since: DateTime.Utc) {
+        const sinceIso = DateTime.formatIso(since);
+        const rows = yield* sql<{ readonly thread_id: string }>`
+          SELECT t.thread_id FROM orchestration_v2_projection_threads t
+          WHERE t.deleted_at IS NULL
+            AND json_extract(t.payload_json, '$.archivedAt') IS NULL
+            AND t.thread_id IN (
+              SELECT failure.thread_id FROM orchestration_v2_projection_turn_items failure
+              WHERE failure.type = 'error' AND failure.status = 'failed'
+                AND julianday(failure.updated_at) >= julianday(${sinceIso})
+                AND (
+                  json_extract(failure.payload_json, '$.failure.class') = 'usage_limit'
+                  OR json_extract(failure.payload_json, '$.failure.code') IN ('authentication_failed', 'billing_error')
+                )
+              UNION
+              SELECT hop.thread_id FROM orchestration_v2_projection_runs hop
+              WHERE julianday(hop.requested_at) >= julianday(${sinceIso})
+                AND json_extract(hop.payload_json, '$.userMessageId') LIKE 'failover-continue:%'
+            )
+          ORDER BY t.thread_id
+        `;
+        return rows.map((row) => ThreadId.make(row.thread_id));
+      },
+      Effect.mapError((cause) => new ProjectionStoreSetupError({ cause })),
+    );
+
     const getLimitRecoveryWakeAt = Effect.fn("ProjectionStore.getLimitRecoveryWakeAt")(
       function* (now: DateTime.Utc) {
         const nowIso = DateTime.formatIso(now);
@@ -7795,6 +7826,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
       getProviderControlContext: readOnReader(getProviderControlContext),
       getLimitRecoveryCandidates: readOnReader(getLimitRecoveryCandidates),
       getLimitRecoveryWakeAt: readOnReader(getLimitRecoveryWakeAt),
+      getProviderFailoverThreadIds: readOnReader(getProviderFailoverThreadIds),
       getRecoveryThreadIds: readOnReader(getRecoveryThreadIds),
       getUnreadableThreadIds: readOnReader(getUnreadableThreadIds),
       getThreadSnapshot: readOnReader(getThreadSnapshot),
