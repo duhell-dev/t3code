@@ -54,6 +54,20 @@ jobs:
             fi
           fi
 
+      # Neue Workflow-Dateien des Originals wären sonst aktiv. Nur diese zwei laufen im Fork.
+      # Direkt nach dem Spiegel-Push und immer, auch wenn ein späterer Schritt scheitert.
+      - name: Keep inherited workflows disabled
+        if: always() && steps.mirror.outputs.blocked == 'false'
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" \
+            --jq '.workflows[] | select(.state == "active") | "\(.id) \(.path)"' |
+          while read -r id path; do
+            case "$path" in
+              .github/workflows/sync-upstream.yml|.github/workflows/duhell-release.yml) ;;
+              *) echo "Schalte $path ab"; gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable" ;;
+            esac
+          done
+
       - name: Merge main into duhell
         id: merge
         if: steps.mirror.outputs.blocked != 'true'
@@ -67,24 +81,11 @@ jobs:
               exit 1
             fi
             echo "conflict=false" >> "$GITHUB_OUTPUT"
-            [ "$(git rev-parse HEAD)" != "$before" ] && echo "changed=true" >> "$GITHUB_OUTPUT"
+            if [ "$(git rev-parse HEAD)" != "$before" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; fi
           else
             git merge --abort || true
             echo "conflict=true" >> "$GITHUB_OUTPUT"
           fi
-
-      # Neue Workflow-Dateien des Originals wären sonst aktiv. Nur diese zwei laufen im Fork.
-      - name: Keep inherited workflows disabled
-        if: steps.merge.outputs.changed == 'true'
-        run: |
-          gh api "repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" \
-            --jq '.workflows[] | select(.state == "active") | "\(.id) \(.path)"' |
-          while read -r id path; do
-            case "$path" in
-              .github/workflows/sync-upstream.yml|.github/workflows/duhell-release.yml) ;;
-              *) echo "Schalte $path ab"; gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable" ;;
-            esac
-          done
 
       # Ein Push mit dem Standard-Token startet keine Workflows; daher hier ausdrücklich.
       # Mit SYNC_TOKEN löst der Push den Release-Lauf schon selbst aus.
