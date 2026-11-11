@@ -8,6 +8,8 @@ on:
 permissions:
   contents: write
   issues: write
+  # Release anstoßen und neue Original-Workflows abschalten.
+  actions: write
 
 concurrency:
   group: sync-upstream
@@ -17,11 +19,16 @@ jobs:
   sync:
     if: github.repository != 'pingdotgg/t3code'
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # Leer, solange Kaan kein SYNC_TOKEN hinterlegt hat (siehe DUHELL.md).
+      HAS_SYNC_TOKEN: ${{ secrets.SYNC_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: duhell
           fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
 
       - name: Configure git
         run: |
@@ -32,30 +39,79 @@ jobs:
           git fetch origin main
 
       - name: Fast-forward main to upstream
+        id: mirror
         run: |
           # Fails (no force) if main ever diverged from the original.
-          git push origin refs/remotes/upstream/main:refs/heads/main
+          if git push origin refs/remotes/upstream/main:refs/heads/main 2> push.log; then
+            cat push.log
+            echo "blocked=false" >> "$GITHUB_OUTPUT"
+          else
+            cat push.log
+            if grep -Eiq "refusing to allow .*workflow" push.log; then
+              echo "blocked=true" >> "$GITHUB_OUTPUT"
+            else
+              exit 1
+            fi
+          fi
 
       - name: Merge main into duhell
         id: merge
+        if: steps.mirror.outputs.blocked != 'true'
         run: |
           git fetch origin main
+          before="$(git rev-parse HEAD)"
           if git merge --no-edit --no-ff origin/main -m "Merge main (upstream sync) into duhell"; then
-            git push origin duhell
+            if ! git push origin duhell 2> push.log; then
+              cat push.log
+              grep -Eiq "refusing to allow .*workflow" push.log && { echo "blocked=true" >> "$GITHUB_OUTPUT"; exit 0; }
+              exit 1
+            fi
             echo "conflict=false" >> "$GITHUB_OUTPUT"
+            [ "$(git rev-parse HEAD)" != "$before" ] && echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             git merge --abort || true
             echo "conflict=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Neue Workflow-Dateien des Originals wären sonst aktiv. Nur diese zwei laufen im Fork.
+      - name: Keep inherited workflows disabled
+        if: steps.merge.outputs.changed == 'true'
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows?per_page=100" \
+            --jq '.workflows[] | select(.state == "active") | "\(.id) \(.path)"' |
+          while read -r id path; do
+            case "$path" in
+              .github/workflows/sync-upstream.yml|.github/workflows/duhell-release.yml) ;;
+              *) echo "Schalte $path ab"; gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable" ;;
+            esac
+          done
+
+      # Ein Push mit dem Standard-Token startet keine Workflows; daher hier ausdrücklich.
+      # Mit SYNC_TOKEN löst der Push den Release-Lauf schon selbst aus.
+      - name: Trigger duHell release
+        if: steps.merge.outputs.changed == 'true' && env.HAS_SYNC_TOKEN != 'true'
+        run: gh workflow run duhell-release.yml --ref duhell -R "$GITHUB_REPOSITORY"
+
+      - name: Open issue when workflow permission is missing
+        if: steps.mirror.outputs.blocked == 'true' || steps.merge.outputs.blocked == 'true'
+        run: |
+          title="Sync mit Original blockiert: Token mit Workflow-Recht fehlt"
+          open=$(gh issue list --state open --search "\"$title\" in:title" --json title --jq "[.[] | select(.title==\"$title\")] | length")
+          if [ "$open" = "0" ]; then
+            gh issue create --title "$title" --body "Das Original hat Dateien unter \`.github/workflows/\` geändert. Das Standard-Token von GitHub Actions darf solche Änderungen nicht pushen, deshalb wurde heute nichts übernommen (main und duhell unverändert, kein Release).
+
+          Abhilfe (einmalig, etwa zwei Minuten): ein Fine-grained Personal Access Token nur für das Repository \`duhell-dev/t3code\` mit den Rechten **Contents: Read and write** und **Workflows: Read and write** anlegen und hier als Actions-Secret **SYNC_TOKEN** hinterlegen (Settings → Secrets and variables → Actions). Danach diesen Lauf neu starten. Schritt für Schritt: DUHELL.md, Abschnitt \"Token für den Abgleich\".
+
+          Lauf: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi
+          exit 1
+
       - name: Open issue on conflict
         if: steps.merge.outputs.conflict == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           title="Sync mit Original: Konflikt"
           open=$(gh issue list --state open --search "\"$title\" in:title" --json title --jq "[.[] | select(.title==\"$title\")] | length")
           if [ "$open" = "0" ]; then
-            gh issue create --title "$title" --body "Der Merge von main (Spiegel von pingdotgg/t3code) in duhell hat einen Konflikt. Es wurde nichts geändert. Bitte lokal mergen und lösen. Lauf: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            gh issue create --title "$title" --body "Der Merge von main (Spiegel von pingdotgg/t3code) in duhell hat einen Konflikt. Es wurde nichts geändert. Bitte lokal mergen und lösen (DUHELL.md, Abschnitt \"Sync-Konflikt\"). Lauf: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           fi
           exit 1

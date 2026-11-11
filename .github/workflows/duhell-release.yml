@@ -1,0 +1,312 @@
+# duHell-Fork: baut bei jedem Push auf `duhell` (und per Hand, und nach dem
+# täglichen Sync, der diesen Workflow ausdrücklich anstößt) die CLI-Archive für
+# Linux x64 und Windows x64 und veröffentlicht sie samt SHA256SUMS als
+# Nightly-Release in diesem Fork. Der Updater der Fork-Bauten liest genau diese
+# Releases (packages/shared/src/cliRelease.ts, CLI_RELEASE_REPOSITORY).
+#
+# Kein npm, kein AUR, kein Desktop-Installer, kein Mobile, keine Signierung,
+# keine Geheimnisse außer dem Standard-GITHUB_TOKEN. Siehe DUHELL.md.
+name: duHell Release
+
+on:
+  push:
+    branches: [duhell]
+    paths-ignore:
+      - "DUHELL.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Nacheinander, nie abbrechen: so entsteht das neuere Release immer nach dem
+# älteren, und der Updater (er nimmt das erste Nightly der Release-Liste)
+# sieht nie ein älteres vor einem neueren.
+concurrency:
+  group: duhell-release
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    name: Version festlegen
+    if: github.repository == 'duhell-dev/t3code'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      sha: ${{ steps.v.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: apps/desktop/package.json
+          sparse-checkout-cone-mode: false
+      # Schema wie das Original (scripts/resolve-nightly-release.ts):
+      # <Basis+1 Patch>-nightly.<JJJJMMTT>.<Nummer>. cliReleaseChannelOf erlaubt
+      # danach keine Buchstaben mehr; den Fork erkennt man an der Nummer
+      # (1000000 + Laufnummer, das Original zählt bei ~4500) und am Release-Titel.
+      - id: v
+        name: Version berechnen
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$(node -p "require('./apps/desktop/package.json').version")"
+          core="${base%%[-+]*}"
+          IFS=. read -r major minor patch <<<"$core"
+          version="${major}.${minor}.$((patch + 1))-nightly.$(date -u +%Y%m%d).$((1000000 + GITHUB_RUN_NUMBER))"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "### Version $version (Commit ${GITHUB_SHA:0:12})" >> "$GITHUB_STEP_SUMMARY"
+
+  bundle:
+    name: JS-Bundle bauen
+    needs: meta
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup dependencies
+        uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/scripts...
+
+      # Öffentliche T3-Connect-Werte wie die Preview-Bauten des Originals.
+      - name: Öffentliche Konfiguration aus .env.example
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in CLERK_PUBLISHABLE_KEY CLERK_JWT_TEMPLATE CLERK_CLI_OAUTH_CLIENT_ID RELAY_URL; do
+            value="$(sed -n "s|^T3CODE_${key}=||p" .env.example)"
+            [[ -n "$value" ]] || { echo "T3CODE_${key} fehlt in .env.example" >&2; exit 1; }
+            echo "T3CODE_${key}=${value}" >> "$GITHUB_ENV"
+          done
+
+      - name: Paketversionen setzen
+        run: node scripts/update-release-package-versions.ts "${{ needs.meta.outputs.version }}"
+
+      - name: Server und Web-Client bauen
+        env:
+          T3CODE_TELEMETRY_CHANNEL: dev
+        run: vp run --filter t3 build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: js-bundle
+          path: apps/server/dist
+          if-no-files-found: error
+          retention-days: 1
+
+  cli:
+    name: CLI ${{ matrix.key }}
+    needs: [meta, bundle]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - key: linux-x64
+            platform: linux
+            arch: x64
+            rust_target: x86_64-unknown-linux-gnu
+            resource_key: linux-x64
+          # Wie das Original: auf Linux gebaut, auf Windows geprüft (Job verify_win).
+          - key: win32-x64
+            platform: win
+            arch: x64
+            rust_target: x86_64-pc-windows-msvc
+            resource_key: win32-x64
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup dependencies
+        uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=t3... --filter=@t3tools/scripts...
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install cargo-xwin
+        if: matrix.platform == 'win'
+        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2
+        with:
+          tool: cargo-xwin@0.23.1
+
+      - name: Resource-Monitor bauen
+        shell: bash
+        run: cargo ${{ matrix.platform == 'win' && 'xwin build' || 'build' }} --locked --release --manifest-path native/resource-monitor/Cargo.toml --target "${{ matrix.rust_target }}"
+
+      - name: Paketversionen setzen
+        run: node scripts/update-release-package-versions.ts "$VERSION"
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: js-bundle
+          path: apps/server/dist
+
+      - name: Nightly-Branding für den Web-Client
+        run: node scripts/apply-web-brand-assets.ts nightly apps/server/dist/client
+
+      # tsdown lädt das Windows-Node ohne Wiederholung; wie im Original vorab
+      # mit Prüfsumme in seinen Cache legen.
+      - name: Windows-Node für die Exe bereitstellen
+        if: matrix.platform == 'win'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node_version="$(node -p 'require("./package.json").engines.node')"
+          name="node-v$node_version-win-x64"
+          dir="$RUNNER_TEMP/node-download"
+          mkdir -p "$dir"
+          fetch=(curl -fsSL --retry 5 --retry-all-errors --connect-timeout 10 --speed-limit 102400 --speed-time 30)
+          "${fetch[@]}" -o "$dir/$name.zip" "https://nodejs.org/dist/v$node_version/$name.zip"
+          "${fetch[@]}" -o "$dir/SHASUMS256.txt" "https://nodejs.org/dist/v$node_version/SHASUMS256.txt"
+          (cd "$dir" && grep " $name.zip\$" SHASUMS256.txt | sha256sum -c -)
+          dest="${XDG_CACHE_HOME:-$HOME/.cache}/tsdown/node/v$node_version/win-x64"
+          mkdir -p "$dest"
+          unzip -p "$dir/$name.zip" "$name/node.exe" > "$dest/node.exe"
+
+      - name: CLI-Exe bauen
+        env:
+          T3CODE_TELEMETRY_CHANNEL: dev
+        run: node apps/server/scripts/cli.ts build-exe --verbose ${{ matrix.platform == 'win' && '--target win-x64' || '' }}
+
+      - name: Resource-Monitor bereitlegen
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="t3-resource-monitor${{ matrix.platform == 'win' && '.exe' || '' }}"
+          target="$RUNNER_TEMP/cli-resource-monitor/${{ matrix.resource_key }}"
+          mkdir -p "$target"
+          cp "native/resource-monitor/target/${{ matrix.rust_target }}/release/$binary" "$target/$binary"
+
+      - name: patchelf installieren
+        if: matrix.platform == 'linux'
+        run: command -v patchelf || { sudo apt-get update && sudo apt-get install -y patchelf; }
+
+      - name: CLI-Archiv bauen
+        run: |
+          node scripts/build-cli-archive.ts \
+            --platform "${{ matrix.platform }}" \
+            --arch "${{ matrix.arch }}" \
+            --version "$VERSION" \
+            --resource-monitor-dir "$RUNNER_TEMP/cli-resource-monitor" \
+            --output-dir release-cli
+          ls -la release-cli
+
+      - name: CLI-Archiv starten (Linux)
+        if: matrix.platform == 'linux'
+        run: node scripts/smoke-cli-archive.ts --archive release-cli/* --expect-version "$VERSION"
+
+      - name: Prüfskript für Windows bündeln
+        if: matrix.platform == 'win'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p verify
+          banner="import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);"
+          scripts/node_modules/.bin/esbuild scripts/smoke-cli-archive.ts --bundle --platform=node --format=esm \
+            --target=node24 --banner:js="$banner" --outfile=verify/smoke-cli-archive.mjs
+
+      - name: Prüfskript hochladen
+        if: matrix.platform == 'win'
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-win32-x64
+          path: verify/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-${{ matrix.key }}
+          path: release-cli/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  verify_win:
+    name: CLI win32-x64 auf Windows starten
+    needs: [meta, cli]
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v8
+        with:
+          name: verify-win32-x64
+          path: verify
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli-win32-x64
+          path: release-cli
+      - name: Smoke-Test
+        shell: bash
+        run: node verify/smoke-cli-archive.mjs --archive release-cli/* --expect-version "${{ needs.meta.outputs.version }}"
+
+  publish:
+    name: Release veröffentlichen
+    needs: [meta, cli, verify_win]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.meta.outputs.version }}
+      SHA: ${{ needs.meta.outputs.sha }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: cli-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: SHA256SUMS schreiben
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          test -f "t3-$VERSION-linux-x64.tar.gz"
+          test -f "t3-$VERSION-win32-x64.zip"
+          sha256sum "t3-$VERSION-linux-x64.tar.gz" "t3-$VERSION-win32-x64.zip" > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Release anlegen
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          files=(release-assets/t3-*.tar.gz release-assets/t3-*.zip release-assets/SHA256SUMS)
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # Wiederholter Lauf derselben Nummer: Dateien ersetzen.
+            gh release upload "$tag" "${files[@]}" --clobber -R "$GITHUB_REPOSITORY"
+          else
+            notes="Fork-Bau von duhell-dev/t3code, Zweig duhell, Commit $SHA.
+          Nur CLI-Archive (Linux x64, Windows x64) für den Updater. Unsigniert, ohne Desktop-Installer.
+          Lauf: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            gh release create "$tag" "${files[@]}" -R "$GITHUB_REPOSITORY" \
+              --target "$SHA" --prerelease --latest=false \
+              --title "T3 Code duHell Nightly $VERSION (${SHA:0:12})" --notes "$notes"
+          fi
+          echo "Release: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" >> "$GITHUB_STEP_SUMMARY"
