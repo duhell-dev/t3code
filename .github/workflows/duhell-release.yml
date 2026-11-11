@@ -4,7 +4,12 @@
 # Nightly-Release in diesem Fork. Der Updater der Fork-Bauten liest genau diese
 # Releases (packages/shared/src/cliRelease.ts, CLI_RELEASE_REPOSITORY).
 #
-# Kein npm, kein AUR, kein Desktop-Installer, kein Mobile, keine Signierung,
+# Dazu der Windows-Desktop-Installer (NSIS, x64) mit nightly.yml für den
+# Electron-Updater. Er wird hier in duhell-dev/t3code gebaut, daher zeigt sein
+# Update-Feed auf diesen Fork (GITHUB_REPOSITORY, scripts/build-desktop-artifact.ts).
+# Scheitert nur der Desktop-Bau, erscheint das Release ohne Installer.
+#
+# Kein npm, kein AUR, kein macOS/Linux-Desktop, kein Mobile, keine Signierung,
 # keine Geheimnisse außer dem Standard-GITHUB_TOKEN. Siehe DUHELL.md.
 name: duHell Release
 
@@ -62,6 +67,11 @@ jobs:
     needs: meta
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      clerk_publishable_key: ${{ steps.public_config.outputs.clerk_publishable_key }}
+      clerk_jwt_template: ${{ steps.public_config.outputs.clerk_jwt_template }}
+      clerk_cli_oauth_client_id: ${{ steps.public_config.outputs.clerk_cli_oauth_client_id }}
+      relay_url: ${{ steps.public_config.outputs.relay_url }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -74,10 +84,11 @@ jobs:
       - name: Setup dependencies
         uses: ./.github/actions/setup-ci-deps
         with:
-          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/scripts...
+          install-args: --filter=t3... --filter=@t3tools/web... --filter=@t3tools/desktop... --filter=@t3tools/scripts...
 
       # Öffentliche T3-Connect-Werte wie die Preview-Bauten des Originals.
       - name: Öffentliche Konfiguration aus .env.example
+        id: public_config
         shell: bash
         run: |
           set -euo pipefail
@@ -85,6 +96,7 @@ jobs:
             value="$(sed -n "s|^T3CODE_${key}=||p" .env.example)"
             [[ -n "$value" ]] || { echo "T3CODE_${key} fehlt in .env.example" >&2; exit 1; }
             echo "T3CODE_${key}=${value}" >> "$GITHUB_ENV"
+            echo "${key,,}=${value}" >> "$GITHUB_OUTPUT"
           done
 
       - name: Paketversionen setzen
@@ -95,10 +107,20 @@ jobs:
           T3CODE_TELEMETRY_CHANNEL: dev
         run: vp run --filter t3 build
 
+      # Electron-Teil für den Windows-Installer. Layout wie im Original
+      # (apps/server/dist und apps/desktop/dist-electron, Artefakt-Wurzel apps/),
+      # weil release-desktop.yml das Bundle so nach apps/ lädt.
+      - name: Desktop-Bundle bauen
+        env:
+          T3CODE_TELEMETRY_CHANNEL: dev
+        run: vp run build:desktop:bundle
+
       - uses: actions/upload-artifact@v7
         with:
           name: js-bundle
-          path: apps/server/dist
+          path: |
+            apps/server/dist
+            apps/desktop/dist-electron
           if-no-files-found: error
           retention-days: 1
 
@@ -160,7 +182,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: js-bundle
-          path: apps/server/dist
+          path: apps
 
       - name: Nightly-Branding für den Web-Client
         run: node scripts/apply-web-brand-assets.ts nightly apps/server/dist/client
@@ -264,9 +286,42 @@ jobs:
         shell: bash
         run: node verify/smoke-cli-archive.mjs --archive release-cli/* --expect-version "${{ needs.meta.outputs.version }}"
 
+  # Windows-Installer über den Desktop-Workflow des Originals, unsigniert
+  # (ohne Azure-Geheimnisse schaltet er die Signierung selbst ab). Wartet auf
+  # den Linux-CLI-Job, dessen Archiv als WSL-Laufzeit in die App kommt.
+  desktop_win:
+    name: Desktop Windows x64
+    needs: [meta, bundle, cli]
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/release-desktop.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.meta.outputs.version }}
+      ref: ${{ needs.meta.outputs.sha }}
+      release_channel: nightly
+      relay_client_tracing: false
+      clerk_publishable_key: ${{ needs.bundle.outputs.clerk_publishable_key }}
+      clerk_jwt_template: ${{ needs.bundle.outputs.clerk_jwt_template }}
+      clerk_cli_oauth_client_id: ${{ needs.bundle.outputs.clerk_cli_oauth_client_id }}
+      relay_url: ${{ needs.bundle.outputs.relay_url }}
+      label: Windows x64
+      runner: ubuntu-24.04
+      verify_runner: windows-2025
+      platform: win
+      target: nsis
+      arch: x64
+      rust_target: x86_64-pc-windows-msvc
+      resource_key: win32-x64
+      cli_archive: false
+      save_pnpm_store: false
+
   publish:
     name: Release veröffentlichen
-    needs: [meta, cli, verify_win]
+    needs: [meta, cli, verify_win, desktop_win]
+    # Der Desktop-Bau darf scheitern; die CLI-Archive erscheinen trotzdem.
+    if: ${{ !cancelled() && needs.cli.result == 'success' && needs.verify_win.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -281,6 +336,30 @@ jobs:
           pattern: cli-*
           merge-multiple: true
           path: release-assets
+
+      - name: Windows-Installer holen
+        if: needs.desktop_win.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: desktop-win-x64
+          path: desktop-win
+
+      # release-desktop.yml hängt an den Feed "-win-x64" an (das Original führt
+      # x64 und arm64 zusammen). Hier gibt es nur x64, also zurückbenennen.
+      - name: Installer und Update-Feed bereitlegen
+        if: needs.desktop_win.result == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la desktop-win
+          shopt -s nullglob
+          for f in desktop-win/*.exe desktop-win/*.blockmap; do cp "$f" release-assets/; done
+          for m in desktop-win/*-win-x64.yml; do
+            base="$(basename "$m")"
+            cp "$m" "release-assets/${base%-win-x64.yml}.yml"
+          done
+          test -f release-assets/nightly.yml
+          ls release-assets/*.exe >/dev/null
 
       - name: SHA256SUMS schreiben
         shell: bash
@@ -328,13 +407,15 @@ jobs:
         run: |
           set -euo pipefail
           tag="v$VERSION"
-          files=(release-assets/t3-*.tar.gz release-assets/t3-*.zip release-assets/SHA256SUMS)
+          shopt -s nullglob
+          files=(release-assets/t3-*.tar.gz release-assets/t3-*.zip release-assets/SHA256SUMS
+                 release-assets/*.exe release-assets/*.blockmap release-assets/nightly.yml)
           if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             # Wiederholter Lauf derselben Nummer: Dateien ersetzen.
             gh release upload "$tag" "${files[@]}" --clobber -R "$GITHUB_REPOSITORY"
           else
             notes="Fork-Bau von duhell-dev/t3code, Zweig duhell, Commit $SHA.
-          Nur CLI-Archive (Linux x64, Windows x64) für den Updater. Unsigniert, ohne Desktop-Installer.
+          CLI-Archive (Linux x64, Windows x64) für den Updater und, wenn gebaut, der Windows-Installer mit nightly.yml. Unsigniert.
           Lauf: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             gh release create "$tag" "${files[@]}" -R "$GITHUB_REPOSITORY" \
               --verify-tag --prerelease --latest=false \
