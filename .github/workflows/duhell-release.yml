@@ -292,6 +292,36 @@ jobs:
           sha256sum "t3-$VERSION-linux-x64.tar.gz" "t3-$VERSION-win32-x64.zip" > SHA256SUMS
           cat SHA256SUMS
 
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+          path: repo
+          sparse-checkout: DUHELL.md
+          sparse-checkout-cone-mode: false
+
+      # Das Standard-Token darf keinen Tag auf einen Commit setzen, der
+      # .github/workflows ändert (403 "Resource not accessible by integration").
+      # Dann zeigt der Tag auf einen leeren Hilfs-Commit: gleicher Baum wie der
+      # gebaute Commit, dieser als Elternteil, also keine Workflow-Änderung.
+      - name: Tag anlegen
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag gibt es schon."
+          elif gh api -i -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$SHA" > ref.log 2>&1; then
+            echo "Tag $tag auf $SHA angelegt."
+          else
+            grep -iE '^HTTP|x-accepted-github-permissions|"message"' ref.log || cat ref.log
+            cd repo
+            git config user.name "duhell-release[bot]"
+            git config user.email "actions@users.noreply.github.com"
+            wrap="$(git commit-tree "$SHA^{tree}" -p "$SHA" -m "Release $tag (Baum von $SHA)")"
+            git push origin "$wrap:refs/tags/$tag"
+            echo "Tag $tag auf Hilfs-Commit $wrap (Baum von $SHA) angelegt."
+          fi
+
       - name: Release anlegen
         shell: bash
         run: |
@@ -306,7 +336,7 @@ jobs:
           Nur CLI-Archive (Linux x64, Windows x64) für den Updater. Unsigniert, ohne Desktop-Installer.
           Lauf: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             gh release create "$tag" "${files[@]}" -R "$GITHUB_REPOSITORY" \
-              --target "$SHA" --prerelease --latest=false \
+              --verify-tag --prerelease --latest=false \
               --title "T3 Code duHell Nightly $VERSION (${SHA:0:12})" --notes "$notes"
           fi
           echo "Release: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" >> "$GITHUB_STEP_SUMMARY"
