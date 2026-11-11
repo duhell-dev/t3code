@@ -26,7 +26,7 @@ Unsere Änderungen am Code des Originals:
 
 1. Auf `duhell` committen und pushen (direkt oder per Pull Request nach `duhell`).
 2. Von selbst: Der Workflow „duHell Release“ baut (etwa 20 bis 30 Minuten) und
-   legt ein Release `v<Version>` an, zum Beispiel `v0.1.9-nightly.20261111.1000001`,
+   legt ein Release `v<Version>` an, zum Beispiel `v0.1.9-nightly.20261111.1000004`,
    mit `t3-<Version>-linux-x64.tar.gz`, `t3-<Version>-win32-x64.zip` und `SHA256SUMS`.
 3. Rechner mit Fork-Bau sehen die neue Version beim nächsten Update-Check.
    Der Update-Knopf beziehungsweise `t3 update --yes` installiert sie.
@@ -62,135 +62,188 @@ jedes Original-Nightly. An späteren Tagen entscheidet das Datum.
 
 ## Rechner umstellen (einmalig)
 
-Vorher den Release-Namen holen, auf den umgestellt wird (das neueste Fork-Nightly):
+Ein Rechner wird nur einmal von Hand umgestellt. Danach fragt sein Updater
+von selbst den Fork.
+
+**Wichtig vor jedem Wechsel:** Eigene Auto-Update-Skripte abschalten, die sich
+nach npm richten (`npm view t3@nightly`, `npm i -g t3@nightly`, zum Beispiel
+`t3up` mit `t3up.timer`). npm kennt nur Original-Bauten; so ein Skript würde den
+Rechner zurück aufs Original holen. `t3 update` und der Update-Knopf reichen
+danach, ein Fork-Bau fragt von selbst den Fork.
+
+`t3 update … --yes` startet den Dienst neu und unterbricht laufende
+Agenten-Schritte, Terminals und verbundene Clients. Also dann umstellen, wenn
+gerade nichts läuft.
+
+### Gemeinsame Befehle (Linux)
 
 ```sh
+# Neueste Fork-Version, genau wie der Updater sie findet (erstes Nightly der Release-Liste)
 V=$(curl -fsSL "https://api.github.com/repos/duhell-dev/t3code/releases?per_page=100" \
   | python3 -c 'import json,re,sys; print(next(r["tag_name"][1:] for r in json.load(sys.stdin) if not r["draft"] and re.fullmatch(r"v[^-+]+-nightly\.\d{8}\.\d+", r["tag_name"])))')
-echo "$V"
+# Version, die der T3-Dienst dieser Home gerade fährt
+aktiv() { python3 -c 'import json,os; print(json.load(open(os.path.expanduser("~/.t3/runtime/service-state.json")))["activeVersion"])'; }
+echo "Fork: $V   aktiv: $(aktiv)"
 ```
 
-Eigene Auto-Update-Skripte zuerst abschalten. Ein Skript, das `npm i -g t3@nightly`
-ausführt oder sich nach `npm view t3@nightly` richtet, holt sonst das Original
-zurück (npm kennt nur Original-Bauten). Danach `t3 update` ohne npm reicht,
-denn ein Fork-Bau fragt von selbst den Fork.
-
-### Linux, T3 als Dienst (`t3code.service`, Ordner `~/.t3/runtime/versions/<Version>`)
-
-Als der Benutzer, dem der Dienst gehört:
+**Wechsel** eines T3-Dienstes (`t3code.service`, Runtimes unter
+`~/.t3/runtime/versions/<Version>`), als der Benutzer, dem der Dienst gehört:
 
 ```sh
-# 1. eigenes Auto-Update stoppen, falls vorhanden (Beispiel t3up)
-systemctl --user disable --now t3up.timer 2>/dev/null || true
-
-# 2. mit der laufenden (Original-)CLI auf den Fork-Bau wechseln
-CUR=$(python3 -c 'import json,os; print(json.load(open(os.path.expanduser("~/.t3/runtime/service-state.json")))["activeVersion"])')
 T3CODE_RELEASE_BASE_URL=https://github.com/duhell-dev/t3code/releases/download \
-  ~/.t3/runtime/versions/"$CUR"/t3 update "$V" --yes
+  ~/.t3/runtime/versions/"$(aktiv)"/t3 update "$V" --yes
 ```
 
-`t3 update` lädt das Archiv aus dem Fork, prüft es gegen `SHA256SUMS`, startet
-`t3 --version` zur Kontrolle und startet den Dienst auf der neuen Version neu.
-Meldet er „older than the installed …“, läuft auf dem Rechner ein Original-Nightly
-von einem späteren Tag. Dann zuerst einen frischen Fork-Bau auslösen (siehe oben)
-und mit dessen Version wiederholen; `--allow-downgrade` nur, wenn das Original
-höchstens einen Tag voraus ist.
+Die laufende Original-CLI lädt dabei Archiv und `SHA256SUMS` aus dem Fork, prüft
+die Prüfsumme, startet zur Kontrolle `t3 --version` und startet den Dienst auf
+der neuen Version neu. Meldet sie „older than the installed …“, läuft ein
+Original-Nightly von einem späteren Tag: erst einen frischen Fork-Bau auslösen
+(siehe „Eine Änderung machen“) und mit dessen Version wiederholen.
 
-Hat der Rechner einen zweiten T3 auf einer eigenen Home (`--base-dir`), der über
-den npm-Starter `t3` läuft (`…/node_modules/t3/bin/t3.mjs`): Der npm-Starter
-startet immer die Runtime **seiner** npm-Version, also eines Original-Baus. Den
-`ExecStart` dieses Dienstes deshalb auf die Runtime des umgestellten Haupt-T3
-zeigen lassen. Dafür ein kleiner Starter, der immer die aktive Version des
-Haupt-T3 nimmt:
+**Prüfen**, ob der Rechner den Fork-Bau fährt:
 
 ```sh
-mkdir -p ~/.local/bin
-cat > ~/.local/bin/t3-aktiv <<'EOF'
-#!/bin/sh
-v=$(python3 -c 'import json,os; print(json.load(open(os.path.expanduser("~/.t3/runtime/service-state.json")))["activeVersion"])') || exit 1
-exec "$HOME/.t3/runtime/versions/$v/t3" "$@"
-EOF
-chmod +x ~/.local/bin/t3-aktiv
-```
-
-Im Dienst (`systemctl --user edit --full <dienst>`) dann zum Beispiel:
-
-```ini
-ExecStart=%h/.local/bin/t3-aktiv serve --mode web --base-dir %h/.t3-duell --host 127.0.0.1 --port 3775 --no-browser
-```
-
-und danach `systemctl --user daemon-reload && systemctl --user restart <dienst>`.
-Ein Wächter, der den zweiten T3 nach einer neuen npm-Version neu startet, muss
-dann ebenfalls `activeVersion` statt der npm-Paketversion vergleichen.
-
-### Je Rechner
-
-| Rechner | Was zu tun ist |
-| --- | --- |
-| pc1, privater T3 (`t3code.service`, Port 3773) | Abschnitt „Linux, T3 als Dienst“. Vorher `t3up.timer` abschalten. |
-| pc1, Duell-T3 (`t3-duell.service`, intern Port 3775, außen 8446) | Läuft über den npm-Starter und nutzt die Runtimes aus `~/.t3`. Erst den privaten T3 auf pc1 umstellen, dann `ExecStart` wie oben ändern, Wächter `t3-duell-nachziehen` anpassen, Dienst neu starten. |
-| pc2, privater T3 (`t3code.service`, Port 3773) | Abschnitt „Linux, T3 als Dienst“ als Besitzer dieses Dienstes. Vorher `t3up.timer` abschalten. |
-| pc2, Team-T3 (eigener Benutzer, Port 3774) | Abschnitt „Linux, T3 als Dienst“ als der Benutzer des Team-T3, mit dessen `~/.t3`. |
-| Windows-PC mit Desktop-App | Siehe nächster Abschnitt. Die Desktop-App kann nicht auf einen Fork-Bau wechseln. |
-
-### Windows mit T3-Desktop-App
-
-Die Desktop-App hat einen **eigenen Update-Weg**: Sie aktualisiert sich als
-Installer über den Electron-Updater aus den Releases des Originals. Dieser Fork
-baut keine Desktop-Installer. Auch `C:\Users\<name>\.t3\bin\t3.cmd` ist nur ein
-Shim, den die App schreibt; er startet die **in der App gebündelte** CLI, keine
-Runtime aus `runtime\versions`. Ein `t3 update` darüber ändert an der App nichts.
-
-Was das heißt:
-
-- Die Desktop-App bleibt ein Original-Bau und aktualisiert sich weiter vom Original.
-  Als Client für Fork-Server funktioniert sie. Ihr „Alles aktualisieren“ will
-  Fork-Server auf die App-Version ziehen; das schlägt ungefährlich fehl (siehe oben).
-- Soll auf dem Windows-PC selbst ein Fork-**Server** laufen, dann daneben die
-  Fork-CLI installieren und als Dienst betreiben (PowerShell):
-
-  ```powershell
-  $env:T3CODE_RELEASE_BASE_URL = "https://github.com/duhell-dev/t3code/releases/download"
-  $env:T3CODE_VERSION = "<V>"   # Fork-Version, siehe oben
-  irm https://raw.githubusercontent.com/duhell-dev/t3code/duhell/scripts/install.ps1 | iex
-  & "$HOME\.local\bin\t3.exe" service install
-  ```
-
-  Den lokalen Server der Desktop-App dann ausschalten und die App mit diesem
-  Server verbinden. Achtung: Das Installskript legt `t3.exe` nach
-  `~\.local\bin`, der Shim der App liegt in `~\.t3\bin`. Wer in `PATH` zuerst
-  steht, ist „`t3`“.
-
-### Prüfen, ob ein Rechner den Fork-Bau fährt
-
-```sh
-python3 -c 'import json,os; print(json.load(open(os.path.expanduser("~/.t3/runtime/service-state.json")))["activeVersion"])'
-# Fork-Bau: letzte Zahl siebenstellig, zum Beispiel 0.1.9-nightly.20261111.1000001
-ps -eo args | grep -E 'runtime/versions/[^/]+/t3 (serve|__service)'   # Pfad zeigt dieselbe Version
+aktiv                                    # letzte Zahl siebenstellig, z. B. 0.1.9-nightly.20261111.1000004
 systemctl --user is-active t3code.service
+ps -eo args | grep -E '[r]untime/versions/[^/]+/t3 (serve|__service)'   # gleiche Version im Pfad
+curl -fsS -o /dev/null -w '%{http_code}\n' \
+  "https://github.com/duhell-dev/t3code/releases/download/v$(aktiv)/SHA256SUMS"   # 200 = Release aus dem Fork
 ```
 
-Die Version muss als Release in `https://github.com/duhell-dev/t3code/releases`
-stehen. In der Oberfläche zeigt Settings → About dieselbe Version.
-Unter Windows: `& "$HOME\.local\bin\t3.exe" --version`.
+In der Oberfläche zeigt Settings → About dieselbe Version.
 
-## Zurück zum Original
-
-Linux, Dienst (die Fork-CLI zieht mit der Basis-URL wieder vom Original):
+**Zurück zum Original:**
 
 ```sh
-O=$(npm view t3@nightly version)      # neuestes Original-Nightly
+O=$(npm view t3@nightly version)         # neuestes Original-Nightly
 T3CODE_RELEASE_BASE_URL=https://github.com/pingdotgg/t3code/releases/download \
-  ~/.t3/runtime/versions/"$(python3 -c 'import json,os; print(json.load(open(os.path.expanduser("~/.t3/runtime/service-state.json")))["activeVersion"])')"/t3 \
-  update "$O" --allow-downgrade --yes
+  ~/.t3/runtime/versions/"$(aktiv)"/t3 update "$O" --allow-downgrade --yes
 systemctl --user enable --now t3up.timer 2>/dev/null || true   # nur wenn vorher abgeschaltet
 ```
 
-`--allow-downgrade` ist nötig, weil ein Fork-Bau vom selben Tag eine höhere
-Nummer trägt. Ein geänderter `ExecStart` für einen zweiten T3 wird wieder auf
-den npm-Starter zurückgestellt. Windows: den Fork-Dienst mit
-`t3.exe service uninstall` entfernen und den lokalen Server der Desktop-App
-wieder einschalten.
+`--allow-downgrade` ist nötig, weil ein Fork-Bau vom selben Tag die höhere Nummer trägt.
+
+### Je Rechner
+
+**pc1, privater T3** (`t3code.service`, Port 3773)
+
+1. `systemctl --user disable --now t3up.timer`
+2. Gemeinsame Befehle, dann „Wechsel“.
+3. „Prüfen“.
+4. Zurück: „Zurück zum Original“.
+
+`t3up` ohne `--local` aktualisiert auch pc2. Auf umgestellten Rechnern also
+`t3up` nicht mehr von Hand aufrufen.
+
+**pc1, Duell-T3** (`t3-duell.service`, intern Port 3775, außen 8446, Home `~/.t3-duell`)
+
+Dieser Dienst startet über den npm-Starter (`…/node_modules/t3/bin/t3.mjs`).
+Der startet immer die Runtime **seiner npm-Version**, also einen Original-Bau,
+und nutzt dafür die Runtimes aus `~/.t3`. Er hat keinen eigenen Updater. Deshalb:
+
+1. Erst den privaten T3 auf pc1 umstellen (oben). Dann liegt die Fork-Runtime in `~/.t3/runtime/versions/$V/`.
+2. Starter anlegen, der immer die aktive Version des privaten T3 nimmt:
+
+   ```sh
+   mkdir -p ~/.local/bin
+   cat > ~/.local/bin/t3-aktiv <<'EOF'
+   #!/bin/sh
+   v=$(python3 -c 'import json,os; print(json.load(open(os.path.expanduser("~/.t3/runtime/service-state.json")))["activeVersion"])') || exit 1
+   exec "$HOME/.t3/runtime/versions/$v/t3" "$@"
+   EOF
+   chmod +x ~/.local/bin/t3-aktiv
+   ```
+
+3. `systemctl --user edit --full t3-duell.service`, die alte `ExecStart`-Zeile
+   notieren (für den Rückweg) und ersetzen durch:
+
+   ```ini
+   ExecStart=%h/.local/bin/t3-aktiv serve --mode web --base-dir %h/.t3-duell --host 127.0.0.1 --port 3775 --no-browser
+   ```
+
+4. Den Wächter `t3-duell-nachziehen` (startet den Duell-T3 neu, wenn eine neue
+   Version da ist) auf dieselbe Quelle umstellen: Statt der Version aus der
+   npm-`package.json` die `activeVersion` aus `~/.t3/runtime/service-state.json`
+   als Sollversion lesen. Sonst vergleicht er mit einem Original-Stand.
+5. `systemctl --user daemon-reload && systemctl --user restart t3-duell.service`
+
+Prüfen:
+
+```sh
+ps -o args= -p "$(systemctl --user show -p MainPID --value t3-duell.service)"
+# muss .../.t3/runtime/versions/<Fork-Version>/t3 serve ... zeigen
+```
+
+Zurück: alte `ExecStart`-Zeile wieder eintragen, den Wächter zurückstellen,
+`daemon-reload`, `restart`. Danach den privaten T3 auf pc1 zurückstellen, sonst
+startet der npm-Starter eine Runtime, die nicht mehr da ist.
+
+**pc2, privater T3** (`t3code.service`, Port 3773)
+
+Wie pc1, privater T3: `t3up.timer` abschalten, „Wechsel“, „Prüfen“, Rückweg wie dort.
+
+**pc2, Team-T3** (eigener Benutzer, eigener `t3code.service`, Port 3774)
+
+Alles als der Benutzer des Team-T3 und mit dessen `~/.t3`. Für `systemctl --user`
+braucht die Sitzung dessen Laufzeitordner:
+
+```sh
+sudo -iu <team-benutzer>
+export XDG_RUNTIME_DIR=/run/user/$(id -u)
+systemctl --user list-timers | grep -i t3     # eigenes Auto-Update? dann abschalten
+# danach: Gemeinsame Befehle, "Wechsel", "Prüfen" wie oben
+```
+
+Zurück wie oben, als derselbe Benutzer.
+
+**Windows-PC mit T3-Desktop-App** (CLI unter `C:\Users\<name>\.t3\bin\t3.cmd`)
+
+Die Desktop-App hat einen **eigenen Update-Weg**: Sie aktualisiert sich als
+Installer über den Electron-Updater aus den Releases des Originals. Dieser Fork
+baut keine Desktop-Installer. `…\.t3\bin\t3.cmd` ist ein Shim, den die App
+schreibt; er startet die **in der App gebündelte** CLI (Electron als Node), keine
+Runtime aus `runtime\versions`. Ein `t3 update` darüber ändert an der App nichts.
+Unter Windows gibt es außerdem keinen T3-Dienst (`t3 service install` kennt nur
+systemd und launchd).
+
+Was das für diesen Rechner heißt:
+
+- Die Desktop-App bleibt ein Original-Bau und aktualisiert sich weiter vom
+  Original. Als Client für die Fork-Server auf pc1 und pc2 funktioniert sie.
+- Ihr Knopf „Alles aktualisieren“ will verbundene Server auf die Version der App
+  ziehen. Bei Fork-Servern schlägt das ungefährlich fehl („No release archive was
+  published for t3@…“), der Server bleibt, wie er ist.
+- Ein eigener Fork-**Server** auf diesem PC geht nur von Hand und ohne
+  automatischen Neustart nach Updates. Das ist nicht empfohlen. Wer es trotzdem will (PowerShell):
+
+  ```powershell
+  $env:T3CODE_RELEASE_BASE_URL = "https://github.com/duhell-dev/t3code/releases/download"
+  $env:T3CODE_VERSION = "<Fork-Version>"
+  irm https://raw.githubusercontent.com/duhell-dev/t3code/duhell/scripts/install.ps1 | iex
+  & "$HOME\.local\bin\t3.exe" --version    # Prüfen: siebenstellige letzte Zahl
+  & "$HOME\.local\bin\t3.exe" serve         # startet den Server im Vordergrund
+  ```
+
+  Das Installskript legt `t3.exe` nach `~\.local\bin`, der Shim der App liegt in
+  `~\.t3\bin`. Wer in `PATH` zuerst steht, ist „`t3`“. Zurück: den Ordner
+  `~\.t3\runtime\versions\<Fork-Version>` und `~\.local\bin\t3.exe` löschen; die App
+  ist davon nicht berührt.
+
+## Wer ein Release auslösen kann
+
+Jeder Push auf `duhell` erzeugt ein Release, und jeder umgestellte Rechner
+installiert es beim nächsten Update. Auslösen können:
+
+- alle mit Schreibrecht auf `duhell-dev/t3code`. `duhell` hat keinen Branch-Schutz;
+  wer Schreibrecht hat, kann direkt pushen oder „Run workflow“ drücken;
+- der tägliche Abgleich: Er mergt das Original **ungeprüft** nach `duhell` und
+  stößt danach das Release an. Was die Betreuer des Originals committen, landet
+  so ohne menschlichen Blick auf unseren Rechnern. Bei Original-Nightlies war das
+  vorher genauso.
+
+`SHA256SUMS` liegt im selben Release wie die Archive und wird vom selben Lauf
+geschrieben. Die Prüfsumme schützt deshalb nur gegen kaputte oder abgebrochene
+Downloads, nicht gegen ein absichtlich schlechtes Release. Signiert ist nichts.
 
 ## Sync-Konflikt
 
@@ -237,3 +290,19 @@ Abhilfe, einmalig:
 
 Mit gesetztem `SYNC_TOKEN` pusht der Abgleich damit; der Push auf `duhell`
 startet das Release dann von selbst. Läuft das Token ab, erscheint wieder das Issue.
+
+Das Token kann nur dieses eine Repository lesen und beschreiben, samt
+Workflow-Dateien. Wer im Repository Schreibrecht hat, könnte es über einen
+eigenen Workflow auslesen; er hätte damit aber nicht mehr Rechte als ohnehin.
+
+Wege ohne Token gibt es, sie sind aber schlechter:
+
+- Den Abgleich auf einem eigenen Rechner laufen lassen: Der braucht dann eine
+  dauerhafte GitHub-Anmeldung mit Workflow-Recht, meist mit viel mehr Rechten als
+  dieses Token, und er muss jeden Tag laufen.
+- Workflow-Änderungen des Originals beim Abgleich weglassen: Dann darf `main` kein
+  Spiegel mehr sein, und `duhell` kann das Original nicht mehr echt mergen (sonst
+  pusht der Merge die Workflow-Commits doch mit). Man müsste jeden Tag einen
+  selbstgebauten Sammel-Commit erzeugen und sich den letzten Stand des Originals
+  merken. Konflikte ließen sich dann nicht mehr mit einem einfachen `git merge`
+  lösen, und die Herkunft der Änderungen ginge verloren.
