@@ -3092,6 +3092,7 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     readonly uuid: string;
     readonly error:
       | "authentication_failed"
+      | "billing_error"
       | "invalid_request"
       | "rate_limit"
       | "server_error"
@@ -6990,6 +6991,53 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       assert.include(terminal.failure.message, configDir);
       assert.include(terminal.failure.message, JSON.stringify(cwd));
       assert.notInclude(terminal.failure.message, "repeated API errors");
+      // Provider failover (duHell fork) reads this code.
+      assert.equal(terminal.failure.code, "authentication_failed");
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          IdAllocator.layer,
+          McpProviderSessions.layer,
+          NodeServices.layer,
+          NodeCrypto.layer,
+        ),
+      ),
+    ),
+  );
+
+  it.effect("marks a used-up API credit as a billing failure", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeWakeHarness;
+      const now = yield* DateTime.now;
+      yield* harness.runtime.startTurn(
+        makeClaudeTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now,
+          attemptId: RunAttemptId.make("attempt-claude-billing-failure"),
+          text: "Continue.",
+          attachments: [],
+        }),
+      );
+      yield* Queue.offerAll(harness.sdkMessages, [
+        makeAssistantErrorFrame({
+          uuid: "00000000-0000-4000-8000-000000000616",
+          error: "billing_error",
+        }),
+        makeResultFrame({
+          uuid: "00000000-0000-4000-8000-000000000617",
+          result: "Credit balance is too low",
+          isError: true,
+          apiErrorStatus: 400,
+          terminalReason: "api_error",
+        }),
+      ]);
+
+      const terminal = yield* Queue.take(harness.terminalReceipts);
+      assert.equal(terminal.status, "failed");
+      if (terminal.status !== "failed") return;
+      assert.equal(terminal.failure.class, "provider_error");
+      assert.equal(terminal.failure.code, "billing_error");
     }).pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -8036,6 +8084,8 @@ describe("ClaudeAdapterV2 background wake turns", () => {
       );
       const terminal = yield* Queue.take(harness.terminalReceipts);
       assert.equal(terminal.status, "failed");
+      // Provider failover (duHell fork) moves threads on this class.
+      if (terminal.status === "failed") assert.equal(terminal.failure.class, "usage_limit");
       const reportedContext = harness.events.flatMap((event) =>
         event.type === "provider_turn.updated" && event.providerTurn.tokenUsage
           ? [event.providerTurn.tokenUsage.usedTokens]

@@ -12,6 +12,10 @@ import {
   formatSearchToolLabel,
 } from "@t3tools/shared/toolActivity";
 import { field, text } from "../unknownField.ts";
+import {
+  PROVIDER_FAILURE_CODE_AUTHENTICATION,
+  PROVIDER_FAILURE_CODE_BILLING,
+} from "../ProviderFailover.ts";
 import { mergeWorkflowAgentMetadata, type WorkflowAgentMetadata } from "../workflowAgentAnswers.ts";
 import {
   initialWorkflowAgentTranscriptCursor,
@@ -4442,6 +4446,8 @@ interface ActiveClaudeTurnContext {
   readonly ignoredTaskIds: Set<string>;
   readonly announcedUsageLimits: Set<string>;
   authenticationFailureMessage: string | undefined;
+  /** The CLI reported "Credit balance is too low" (assistant error billing_error). */
+  billingFailure: boolean;
   readonly rejectedRateLimitTypes: Set<string>;
   readonly rateLimitResetTimes: Map<string, string | null>;
   latestAssistantRateLimit: {
@@ -9380,6 +9386,9 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
                   };
                 }
               }
+              if (message.error === "billing_error") {
+                context.billingFailure = true;
+              }
               if (message.error === "authentication_failed") {
                 context.authenticationFailureMessage = claudeSignedOutMessage({
                   configDir: adapterOptions.environment.CLAUDE_CONFIG_DIR,
@@ -10343,7 +10352,13 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             const terminalFailure =
               resultFailure?.class === "usage_limit"
                 ? { ...resultFailure, resetAt: resetAt ?? resultFailure.resetAt ?? null }
-                : resultFailure;
+                : resultFailure !== null &&
+                    context.authenticationFailureMessage !== undefined &&
+                    !permissionDenied
+                  ? { ...resultFailure, code: PROVIDER_FAILURE_CODE_AUTHENTICATION }
+                  : resultFailure !== null && context.billingFailure
+                    ? { ...resultFailure, code: PROVIDER_FAILURE_CODE_BILLING }
+                    : resultFailure;
             yield* finalizeActiveTurn({
               context,
               status: interrupted
@@ -11523,6 +11538,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
               ignoredTaskIds: new Set(),
               announcedUsageLimits: new Set(),
               authenticationFailureMessage: undefined,
+              billingFailure: false,
               rejectedRateLimitTypes: new Set(),
               rateLimitResetTimes: new Map(),
               latestAssistantRateLimit: null,
