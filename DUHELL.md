@@ -57,6 +57,11 @@ jedes Original-Nightly. An späteren Tagen entscheidet das Datum.
 - Dasselbe gilt, wenn eine Desktop-App des Originals verbundene Fork-Server auf
   ihre eigene Version „mitziehen“ will: Das schlägt mit derselben Meldung fehl
   und lässt den Server, wie er ist.
+- Claude-Prozesse, die der T3 startet, melden sich mit `CLAUDE_CODE_ENTRYPOINT=sdk-ts` statt `t3-code`
+  (`apps/server/src/provider/Drivers/ClaudeHome.ts`, Kaan, 11.11.2026, Commit 84e5679). `sdk-ts` ist die Vorgabe
+  des Agent SDK und war bis zum 2.11.2026 auch der Wert des Originals (dort geändert in #28410). Ein Wert in der
+  Umgebung der Instanz oder in Claudes `settings.json` `env` gewinnt weiterhin. Das gilt für jedes Konto, das auf
+  einem umgestellten Rechner angemeldet ist; ob Anthropic die Kennung für die Abrechnung auswertet, ist nicht belegt.
 - Signiert sind die Fork-Bauten nicht (kein Authenticode unter Windows).
   Windows SmartScreen kann beim ersten Start warnen.
 
