@@ -1,0 +1,61 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository != 'pingdotgg/t3code'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: duhell
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "sync-upstream[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          git remote add upstream https://github.com/pingdotgg/t3code.git
+          git fetch upstream main
+          git fetch origin main
+
+      - name: Fast-forward main to upstream
+        run: |
+          # Fails (no force) if main ever diverged from the original.
+          git push origin refs/remotes/upstream/main:refs/heads/main
+
+      - name: Merge main into duhell
+        id: merge
+        run: |
+          git fetch origin main
+          if git merge --no-edit --no-ff origin/main -m "Merge main (upstream sync) into duhell"; then
+            git push origin duhell
+            echo "conflict=false" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort || true
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open issue on conflict
+        if: steps.merge.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Sync mit Original: Konflikt"
+          open=$(gh issue list --state open --search "\"$title\" in:title" --json title --jq "[.[] | select(.title==\"$title\")] | length")
+          if [ "$open" = "0" ]; then
+            gh issue create --title "$title" --body "Der Merge von main (Spiegel von pingdotgg/t3code) in duhell hat einen Konflikt. Es wurde nichts geändert. Bitte lokal mergen und lösen. Lauf: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi
+          exit 1
