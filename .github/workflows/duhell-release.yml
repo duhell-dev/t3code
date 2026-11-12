@@ -146,6 +146,11 @@ jobs:
             resource_key: win32-x64
     env:
       VERSION: ${{ needs.meta.outputs.version }}
+      # build-exe bundles the server again; without these the CLI ships without T3 Connect.
+      T3CODE_CLERK_PUBLISHABLE_KEY: ${{ needs.bundle.outputs.clerk_publishable_key }}
+      T3CODE_CLERK_JWT_TEMPLATE: ${{ needs.bundle.outputs.clerk_jwt_template }}
+      T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: ${{ needs.bundle.outputs.clerk_cli_oauth_client_id }}
+      T3CODE_RELAY_URL: ${{ needs.bundle.outputs.relay_url }}
     steps:
       - uses: actions/checkout@v6
         with:
