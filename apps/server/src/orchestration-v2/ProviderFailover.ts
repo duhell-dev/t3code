@@ -20,10 +20,15 @@ import * as DateTime from "effect/DateTime";
 export const PROVIDER_FAILURE_CODE_AUTHENTICATION = "authentication_failed";
 /** Failure code the Claude adapter sets when the CLI reports billing_error ("Credit balance is too low"). */
 export const PROVIDER_FAILURE_CODE_BILLING = "billing_error";
+/**
+ * Failure code the Claude adapter sets when the API refuses with 400 "You have reached your
+ * specified API usage limits. You will regain access on <date>": the key's spend cap is reached.
+ */
+export const PROVIDER_FAILURE_CODE_SPEND_LIMIT = "api_spend_limit";
 
 /** How long an instance counts as exhausted when the failure carries no reset time. */
 export const FAILOVER_AUTH_BACKOFF_MS = 30 * 60 * 1000;
-export const FAILOVER_BILLING_BACKOFF_MS = 30 * 60 * 1000;
+const FAILOVER_BILLING_BACKOFF_MS = 30 * 60 * 1000;
 export const FAILOVER_LIMIT_BACKOFF_MS = 5 * 60 * 60 * 1000;
 
 const CONTINUATION_MESSAGE_PREFIX = "failover-continue:";
@@ -32,12 +37,18 @@ export function failoverContinuationText(from: string, to: string, cause: Failov
   return `The previous provider instance ${from} stopped working because ${failoverCauseText(cause)}. This thread now runs on ${to}, which works. That failure is not part of your task; ignore it. Continue where you left off.`;
 }
 
-export type FailoverCause = "usage_limit" | "authentication" | "billing";
+/** The continuation after a stopped thread resumes because a chain instance works again. */
+export function failoverResumeText(from: string, to: string, cause: FailoverCause): string {
+  return `This thread stopped on ${from} because ${failoverCauseText(cause)} and no other provider instance was usable. ${to} is usable again and this thread now runs there. That failure is not part of your task; ignore it. Continue where you left off.`;
+}
+
+export type FailoverCause = "usage_limit" | "authentication" | "billing" | "spend_limit";
 
 export function failoverCause(
   failure: Pick<OrchestrationV2ProviderFailure, "class" | "code"> | null,
 ): FailoverCause | null {
   if (failure === null) return null;
+  if (failure.code === PROVIDER_FAILURE_CODE_SPEND_LIMIT) return "spend_limit";
   if (failure.class === "usage_limit") return "usage_limit";
   if (failure.code === PROVIDER_FAILURE_CODE_AUTHENTICATION) return "authentication";
   if (failure.code === PROVIDER_FAILURE_CODE_BILLING) return "billing";
@@ -52,6 +63,8 @@ export function failoverCauseText(cause: FailoverCause): string {
       return "it is not logged in";
     case "billing":
       return "its API credit is used up";
+    case "spend_limit":
+      return "its API spend limit is reached";
   }
 }
 
@@ -61,7 +74,7 @@ export function failoverContinuationMessageId(threadId: ThreadId, failedRunId: R
 }
 
 /** The failed run a failover continuation continues, or null for any other message. */
-export function failoverContinuedRunId(threadId: ThreadId, userMessageId: string): string | null {
+function failoverContinuedRunId(threadId: ThreadId, userMessageId: string): string | null {
   const prefix = `${CONTINUATION_MESSAGE_PREFIX}${threadId}:`;
   return userMessageId.startsWith(prefix) ? userMessageId.slice(prefix.length) : null;
 }
@@ -72,11 +85,12 @@ export function exhaustedUntilMs(
   failure: Pick<OrchestrationV2ProviderFailure, "resetAt">,
   failedAtMs: number,
 ): number {
-  if (cause === "usage_limit") {
+  if (cause === "usage_limit" || cause === "spend_limit") {
     const resetMs = failure.resetAt == null ? Number.NaN : Date.parse(failure.resetAt);
     return Number.isFinite(resetMs) && resetMs > failedAtMs
       ? resetMs
-      : failedAtMs + FAILOVER_LIMIT_BACKOFF_MS;
+      : failedAtMs +
+          (cause === "spend_limit" ? FAILOVER_BILLING_BACKOFF_MS : FAILOVER_LIMIT_BACKOFF_MS);
   }
   return (
     failedAtMs + (cause === "billing" ? FAILOVER_BILLING_BACKOFF_MS : FAILOVER_AUTH_BACKOFF_MS)
@@ -152,8 +166,10 @@ export interface FailoverInput {
   readonly runs: ReadonlyArray<FailoverRun>;
   /** Archived, settled, a pending request or a native subagent thread: never touch it. */
   readonly blocked: boolean;
-  /** Run ids that already carry a failover notice (switch or stop). */
+  /** Run ids that already carry a failover notice (switch, stop or resume). */
   readonly noticedRunIds: ReadonlySet<string>;
+  /** Run ids whose only notice is a stop: the thread waits there for a usable instance. */
+  readonly stoppedRunIds?: ReadonlySet<string>;
   readonly health: ReadonlyMap<string, InstanceHealth>;
   /** Instance id -> epoch ms until which it is exhausted, from its failed runs. */
   readonly exhaustedUntil: ReadonlyMap<string, number>;
@@ -178,13 +194,20 @@ export type FailoverDecision =
       readonly tried: ReadonlyArray<string>;
     }
   | {
+      readonly type: "resume";
+      readonly failedRunId: RunId;
+      readonly from: string;
+      readonly to: string;
+      readonly cause: FailoverCause;
+    }
+  | {
       readonly type: "return";
       readonly lastRunId: RunId;
       readonly from: string;
       readonly to: string;
     };
 
-export function isInstanceUsable(
+function isInstanceUsable(
   instanceId: string,
   input: Pick<FailoverInput, "health" | "exhaustedUntil" | "usageExhaustedUntil" | "nowMs">,
 ): boolean {
@@ -251,21 +274,47 @@ export function providerFailoverDecision(input: FailoverInput): FailoverDecision
   if (latest.status === "failed") {
     // An interrupted run has status "interrupted" and never reaches this branch.
     const cause = failoverCause(latest.failure);
-    if (cause === null || input.noticedRunIds.has(latest.id)) return null;
+    if (cause === null) return null;
     // Someone already moved the thread after the failure; leave it alone.
     if (latest.providerInstanceId !== input.threadInstanceId) return null;
     if (!chain.includes(latest.providerInstanceId)) return null;
-    const tried = new Set(
-      failoverStreak(input.threadId, latest, byId).map((run) => run.providerInstanceId as string),
+    const stopped = input.stoppedRunIds?.has(latest.id) === true;
+    if (input.noticedRunIds.has(latest.id) && !stopped) return null;
+    // An instance that failed in this streak counts again once its own failure stopped blocking it,
+    // so a failure on the last link starts over at the front of the chain instead of staying put.
+    const blockedByStreak = new Map<string, number>();
+    for (const run of failoverStreak(input.threadId, latest, byId)) {
+      const exhausted = exhaustionFromRun(run);
+      const untilMs = exhausted?.untilMs ?? Infinity;
+      if ((blockedByStreak.get(run.providerInstanceId) ?? 0) < untilMs) {
+        blockedByStreak.set(run.providerInstanceId, untilMs);
+      }
+    }
+    // A fresh failure never retries the instance that just failed; a resume may go back to it.
+    const next = chain.find(
+      (id) =>
+        (stopped || id !== latest.providerInstanceId) &&
+        (blockedByStreak.get(id) ?? 0) <= input.nowMs &&
+        isInstanceUsable(id, input),
     );
-    const next = chain.find((id) => !tried.has(id) && isInstanceUsable(id, input));
+    if (stopped) {
+      // The stop notice is written; wait quietly until an instance works again, then resume.
+      if (next === undefined) return null;
+      return {
+        type: "resume",
+        failedRunId: latest.id,
+        from: latest.providerInstanceId,
+        to: next,
+        cause,
+      };
+    }
     if (next === undefined) {
       return {
         type: "stop",
         failedRunId: latest.id,
         from: latest.providerInstanceId,
         cause,
-        tried: chain.filter((id) => tried.has(id)),
+        tried: chain.filter((id) => blockedByStreak.has(id)),
       };
     }
     return {
@@ -295,12 +344,10 @@ export function providerFailoverDecision(input: FailoverInput): FailoverDecision
     )
   )
     return null;
-  const streak = failoverStreak(input.threadId, lastHop, byId);
-  const origin = streak[streak.length - 1]!.providerInstanceId as string;
-  const originIndex = chain.indexOf(origin);
+  // Back to the first usable instance of the whole chain, not only to where the streak began.
   const currentIndex = chain.indexOf(input.threadInstanceId);
-  if (originIndex < 0 || currentIndex < 0 || originIndex >= currentIndex) return null;
-  const target = chain.slice(originIndex, currentIndex).find((id) => isInstanceUsable(id, input));
+  if (currentIndex <= 0) return null;
+  const target = chain.slice(0, currentIndex).find((id) => isInstanceUsable(id, input));
   if (target === undefined) return null;
   return { type: "return", lastRunId: latest.id, from: input.threadInstanceId, to: target };
 }

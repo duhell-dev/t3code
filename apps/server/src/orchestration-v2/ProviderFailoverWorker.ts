@@ -34,6 +34,7 @@ import {
   failoverCauseText,
   failoverContinuationMessageId,
   failoverContinuationText,
+  failoverResumeText,
   normalizeFailoverChain,
   providerFailoverDecision,
   usageExhaustedUntilMs,
@@ -44,7 +45,12 @@ import {
 
 /** Failures older than this neither move threads nor mark instances exhausted. */
 const LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
-const NOTICE_SIGNALS = ["provider-failover", "provider-failover-stop", "provider-failover-return"];
+const NOTICE_SIGNALS = [
+  "provider-failover",
+  "provider-failover-stop",
+  "provider-failover-resume",
+  "provider-failover-return",
+];
 
 const affectsFailover = (event: OrchestrationV2DomainEvent) =>
   event.type.startsWith("thread.") ||
@@ -146,6 +152,44 @@ const makeSweep = Effect.gen(function* () {
     const target = ProviderInstanceId.make(decision.to);
     // Model and options stay; only the instance changes (same path as t3_thread_configure).
     const modelSelection = { ...input.modelSelection, instanceId: target };
+    if (decision.type === "resume") {
+      const run = input.runs.get(decision.failedRunId)!;
+      yield* Effect.logWarning("orchestration-v2.provider-failover.resume", {
+        threadId,
+        runId: decision.failedRunId,
+        from: decision.from,
+        to: decision.to,
+        cause: decision.cause,
+      });
+      if (decision.to !== decision.from) {
+        yield* threads.dispatch({
+          type: "provider.switch",
+          commandId: CommandId.make(`provider-failover-resume:${decision.failedRunId}`),
+          threadId,
+          modelSelection,
+        });
+      }
+      yield* writeNotice({
+        threadId,
+        run,
+        signal: "provider-failover-resume",
+        title: "Provider failover: resumed",
+        message: `Resumed on ${decision.to}: it is usable again after the failover had stopped on ${decision.from}.`,
+      });
+      const messageId = failoverContinuationMessageId(threadId, decision.failedRunId);
+      yield* threads.dispatch({
+        type: "message.dispatch",
+        commandId: CommandId.make(messageId),
+        messageId: MessageId.make(messageId),
+        threadId,
+        text: failoverResumeText(decision.from, decision.to, decision.cause),
+        attachments: [],
+        dispatchMode: { type: "start_immediately" },
+        createdBy: "agent",
+        creationSource: "server",
+      });
+      return;
+    }
     if (decision.type === "switch") {
       const run = input.runs.get(decision.failedRunId)!;
       yield* Effect.logWarning("orchestration-v2.provider-failover.switch", {
@@ -239,6 +283,7 @@ const makeSweep = Effect.gen(function* () {
       readonly runs: ReadonlyArray<OrchestrationV2Run>;
       readonly failoverRuns: ReadonlyArray<FailoverRun>;
       readonly noticedRunIds: ReadonlySet<string>;
+      readonly stoppedRunIds: ReadonlySet<string>;
     }> = [];
     for (const threadId of threadIds) {
       const records = yield* projections
@@ -252,15 +297,27 @@ const makeSweep = Effect.gen(function* () {
         runs.flatMap((run) =>
           NOTICE_SIGNALS.map(
             (signal) =>
-              [ids.derive.runSignalTurnItem({ runId: run.id, signal }) as string, run.id] as const,
+              [
+                ids.derive.runSignalTurnItem({ runId: run.id, signal }) as string,
+                { runId: run.id as string, signal },
+              ] as const,
           ),
         ),
       );
-      const noticedRunIds = new Set<string>();
+      const noticeSignals = new Map<string, Set<string>>();
       for (const item of turnItems) {
-        const runId = noticeIds.get(item.id);
-        if (runId !== undefined) noticedRunIds.add(runId);
+        const notice = noticeIds.get(item.id);
+        if (notice === undefined) continue;
+        const signals = noticeSignals.get(notice.runId) ?? new Set<string>();
+        signals.add(notice.signal);
+        noticeSignals.set(notice.runId, signals);
       }
+      const noticedRunIds = new Set(noticeSignals.keys());
+      const stoppedRunIds = new Set(
+        [...noticeSignals]
+          .filter(([, signals]) => signals.size === 1 && signals.has("provider-failover-stop"))
+          .map(([runId]) => runId),
+      );
       const failoverRuns = runs.map((run) => ({
         ...run,
         failure: latestRootProviderFailure(run, turnItems),
@@ -285,6 +342,7 @@ const makeSweep = Effect.gen(function* () {
         runs,
         failoverRuns,
         noticedRunIds,
+        stoppedRunIds,
       });
     }
     let acted = false;
@@ -304,6 +362,7 @@ const makeSweep = Effect.gen(function* () {
         runs: state.failoverRuns,
         blocked: state.blocked,
         noticedRunIds: state.noticedRunIds,
+        stoppedRunIds: state.stoppedRunIds,
         health,
         exhaustedUntil,
         usageExhaustedUntil,

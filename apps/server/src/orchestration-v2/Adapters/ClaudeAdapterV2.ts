@@ -15,6 +15,7 @@ import { field, text } from "../unknownField.ts";
 import {
   PROVIDER_FAILURE_CODE_AUTHENTICATION,
   PROVIDER_FAILURE_CODE_BILLING,
+  PROVIDER_FAILURE_CODE_SPEND_LIMIT,
 } from "../ProviderFailover.ts";
 import { mergeWorkflowAgentMetadata, type WorkflowAgentMetadata } from "../workflowAgentAnswers.ts";
 import {
@@ -4419,6 +4420,17 @@ function providerFailureFromResult(
           receivedAt,
         )
       : undefined;
+  // A spend cap on the API key: 400 "You have reached your specified API usage limits. You will
+  // regain access on 2026-12-01 at 00:00 UTC." The account is unusable until then (failover).
+  if (apiErrorStatus === 400 && SPEND_LIMIT_RESULT.test(message.result)) {
+    return makeProviderFailure({
+      message: listedError ?? structuredError ?? failureHint ?? message.result,
+      code: PROVIDER_FAILURE_CODE_SPEND_LIMIT,
+      class: "usage_limit",
+      retryable: false,
+      resetAt: spendLimitResetAt(message.result),
+    });
+  }
   return makeProviderFailure({
     message: listedError ?? structuredError ?? failureHint ?? message.result,
     code:
@@ -4429,6 +4441,17 @@ function providerFailureFromResult(
     retryable: apiErrorStatus === 429 || apiErrorStatus === 529 ? true : null,
     resetAt: resetAt ?? null,
   });
+}
+
+const SPEND_LIMIT_RESULT = /You have reached your specified API usage limits/i;
+
+/** "You will regain access on 2026-12-01 at 00:00 UTC" as an ISO time, or null. */
+function spendLimitResetAt(result: string): string | null {
+  const match = /regain access on (\d{4}-\d{2}-\d{2})(?: at (\d{1,2}):(\d{2}))? ?UTC/i.exec(result);
+  if (match === null) return null;
+  const hours = (match[2] ?? "0").padStart(2, "0");
+  const iso = `${match[1]}T${hours}:${match[3] ?? "00"}:00.000Z`;
+  return Number.isFinite(Date.parse(iso)) ? iso : null;
 }
 
 function providerFailureFromApiRetry(message: SDKAPIRetryMessage): OrchestrationV2ProviderFailure {

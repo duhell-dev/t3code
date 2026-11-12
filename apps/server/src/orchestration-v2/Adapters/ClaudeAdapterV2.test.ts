@@ -7437,6 +7437,49 @@ describe("ClaudeAdapterV2 background wake turns", () => {
     ),
   );
 
+  it.effect("marks a reached API spend cap as a spend-limit failure with its reset date", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeWakeHarness;
+      const now = yield* DateTime.now;
+      yield* harness.runtime.startTurn(
+        makeClaudeTestTurnInput({
+          threadId: harness.threadId,
+          providerThread: harness.providerThread,
+          now,
+          attemptId: RunAttemptId.make("attempt-claude-spend-limit"),
+          text: "Continue.",
+          attachments: [],
+        }),
+      );
+      yield* Queue.offerAll(harness.sdkMessages, [
+        makeResultFrame({
+          uuid: "00000000-0000-4000-8000-000000000618",
+          result:
+            "API Error: 400 You have reached your specified API usage limits. You will regain access on 2026-12-01 at 00:00 UTC.",
+          isError: true,
+          apiErrorStatus: 400,
+          terminalReason: "api_error",
+        }),
+      ]);
+
+      const terminal = yield* Queue.take(harness.terminalReceipts);
+      assert.equal(terminal.status, "failed");
+      if (terminal.status !== "failed") return;
+      assert.equal(terminal.failure.class, "usage_limit");
+      assert.equal(terminal.failure.code, "api_spend_limit");
+      assert.equal(terminal.failure.resetAt, "2026-12-01T00:00:00.000Z");
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          IdAllocator.layer,
+          McpProviderSessions.layer,
+          NodeServices.layer,
+          NodeCrypto.layer,
+        ),
+      ),
+    ),
+  );
+
   it.effect("shows a 403 permission error instead of the login hint", () =>
     Effect.gen(function* () {
       const harness = yield* makeWakeHarness;
