@@ -12,11 +12,4 @@ into `main`, merges `main` into `duhell` and pushes, which starts a release buil
 without it, upstream changes under `.github/workflows/` cannot be pushed and the run opens an issue
 instead. A merge conflict also opens an issue and changes nothing.
 
-## Updating the installs
-
-Nothing updates itself. On pc1 the self-update timer (`t3up.timer`) is off; new fork builds are
-installed with the update button in the app. When the private T3 gets a new version,
-`t3-duell-nachziehen.path` brings the Duell T3 to the same version. pc2 is updated through its
-homelab orchestrator.
-
-Other operating notes are kept outside this repository.
+Operating notes are kept outside this repository.
