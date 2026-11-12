@@ -55,7 +55,7 @@ jobs:
             fi
           fi
 
-      # Neue Workflow-Dateien des Originals wären sonst aktiv. Nur diese drei laufen im Fork.
+      # Neue Workflow-Dateien des Originals wären sonst aktiv. Nur diese zwei laufen im Fork.
       # Direkt nach dem Spiegel-Push und immer, auch wenn ein späterer Schritt scheitert.
       - name: Keep inherited workflows disabled
         if: always() && steps.mirror.outputs.blocked == 'false'
@@ -64,7 +64,7 @@ jobs:
             --jq '.workflows[] | select(.state == "active") | "\(.id) \(.path)"' |
           while read -r id path; do
             case "$path" in
-              .github/workflows/sync-upstream.yml|.github/workflows/duhell-release.yml|.github/workflows/duhell-privacy.yml) ;;
+              .github/workflows/sync-upstream.yml|.github/workflows/duhell-release.yml) ;;
               *) echo "Schalte $path ab"; gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$id/disable" ;;
             esac
           done
