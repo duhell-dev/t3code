@@ -385,6 +385,9 @@ jobs:
       # auf einen leeren Hilfs-Commit (gleicher Baum, gebauter Commit als Elternteil).
       - name: Tag anlegen
         shell: bash
+        env:
+          # Ein Tag auf einen Commit mit geänderten Original-Workflows braucht das Workflow-Recht.
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
         run: |
           set -euo pipefail
           tag="v$VERSION"
