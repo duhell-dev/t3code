@@ -5,6 +5,8 @@ import {
   RunId,
   ThreadId,
   type OrchestrationV2ProviderFailure,
+  type ServerProvider,
+  type ServerProviderUsageLimits,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 
@@ -17,6 +19,7 @@ import {
   failoverContinuationMessageId,
   normalizeFailoverChain,
   providerFailoverDecision,
+  usageExhaustedUntilMs,
   type FailoverInput,
   type FailoverRun,
 } from "./ProviderFailover.ts";
@@ -86,6 +89,7 @@ function input(overrides: Partial<FailoverInput>): FailoverInput {
     noticedRunIds: new Set(),
     health: allUsable,
     exhaustedUntil: new Map(),
+    usageExhaustedUntil: new Map(),
     nowMs,
     ...overrides,
   };
@@ -124,6 +128,69 @@ describe("exhaustedUntilMs", () => {
     );
     assert.equal(exhaustionFromRun(run(1, "claudeNepo", "failed", { failure: otherError })), null);
     assert.equal(exhaustionFromRun(run(1, "claudeNepo", "completed")), null);
+  });
+});
+
+const weeklyReset = "2026-11-14T01:00:00.000Z";
+function claudeUsage(
+  windows: ServerProviderUsageLimits["windows"],
+  unavailable?: ServerProviderUsageLimits["unavailable"],
+): Pick<ServerProvider, "driver" | "usageLimits"> {
+  return {
+    driver: "claudeAgent" as ServerProvider["driver"],
+    usageLimits: {
+      checkedAt: "2026-11-12T21:59:00.000Z",
+      windows,
+      ...(unavailable === undefined ? {} : { unavailable }),
+    },
+  };
+}
+const fullWeekly = {
+  id: "seven_day",
+  kind: "weekly" as const,
+  label: "Weekly",
+  usedPercent: 100,
+  resetsAt: weeklyReset,
+};
+
+describe("usageExhaustedUntilMs", () => {
+  it("blocks a full window until its reset, else for the limit back-off", () => {
+    assert.equal(
+      usageExhaustedUntilMs(claudeUsage([fullWeekly]), nowMs, "claude-opus-5-5"),
+      Date.parse(weeklyReset),
+    );
+    const { resetsAt: _, ...noReset } = fullWeekly;
+    assert.equal(
+      usageExhaustedUntilMs(claudeUsage([noReset]), nowMs),
+      nowMs + FAILOVER_LIMIT_BACKOFF_MS,
+    );
+  });
+
+  it("does not block a full window whose reset has passed, or one below 100 %", () => {
+    const past = { ...fullWeekly, resetsAt: "2026-11-12T21:00:00.000Z" };
+    assert.equal(usageExhaustedUntilMs(claudeUsage([past]), nowMs), null);
+    assert.equal(
+      usageExhaustedUntilMs(claudeUsage([{ ...fullWeekly, usedPercent: 99 }]), nowMs),
+      null,
+    );
+  });
+
+  it("does not block on unreadable limits, even with a retained full window", () => {
+    assert.equal(usageExhaustedUntilMs(undefined, nowMs), null);
+    assert.equal(
+      usageExhaustedUntilMs(claudeUsage([fullWeekly], { reason: "probeFailed" }), nowMs),
+      null,
+    );
+    assert.equal(usageExhaustedUntilMs(claudeUsage([], { reason: "unsupported" }), nowMs), null);
+  });
+
+  it("lets a model-scoped Claude window block only its own model family", () => {
+    const fable = { ...fullWeekly, id: "seven_day_fable", label: "Weekly · Fable" };
+    assert.equal(usageExhaustedUntilMs(claudeUsage([fable]), nowMs, "claude-opus-5-5"), null);
+    assert.equal(
+      usageExhaustedUntilMs(claudeUsage([fable]), nowMs, "claude-fable-5-2"),
+      Date.parse(weeklyReset),
+    );
   });
 });
 
@@ -179,6 +246,18 @@ describe("providerFailoverDecision", () => {
       input({ runs, exhaustedUntil: new Map([["claudeNepo", nowMs]]) }),
     );
     assert.equal(expired?.type === "switch" ? expired.to : null, "claudeNepo");
+  });
+
+  it("skips an instance whose usage shows a full window, until that window resets", () => {
+    const runs = [run(1, "claudeAgent", "failed", { failure: limit })];
+    const full = providerFailoverDecision(
+      input({ runs, usageExhaustedUntil: new Map([["claudeNepo", Date.parse(weeklyReset)]]) }),
+    );
+    assert.equal(full?.type === "switch" ? full.to : null, "claudeGuthaben");
+    const reset = providerFailoverDecision(
+      input({ runs, usageExhaustedUntil: new Map([["claudeNepo", nowMs]]) }),
+    );
+    assert.equal(reset?.type === "switch" ? reset.to : null, "claudeNepo");
   });
 
   it("skips unauthenticated, disabled and unknown instances", () => {
@@ -320,6 +399,25 @@ describe("providerFailoverDecision", () => {
         from: "claudeGuthaben",
         to: "claudeAgent",
       });
+    });
+
+    it("never goes back to an instance whose usage shows a full window", () => {
+      const free = { ...movedState, exhaustedUntil: new Map() };
+      const decision = providerFailoverDecision({
+        ...free,
+        usageExhaustedUntil: new Map([["claudeAgent", Date.parse(weeklyReset)]]),
+      });
+      assert.equal(decision?.type === "return" ? decision.to : null, "claudeNepo");
+      assert.equal(
+        providerFailoverDecision({
+          ...free,
+          usageExhaustedUntil: new Map([
+            ["claudeAgent", Date.parse(weeklyReset)],
+            ["claudeNepo", nowMs + 60_000],
+          ]),
+        }),
+        null,
+      );
     });
 
     it("never goes back mid-run or after a manual switch", () => {

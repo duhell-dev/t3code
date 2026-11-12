@@ -5,6 +5,7 @@
  */
 import {
   CommandId,
+  type ServerProvider,
   isProviderNativeSubagentThread,
   MessageId,
   ProviderInstanceId,
@@ -35,6 +36,7 @@ import {
   failoverContinuationText,
   normalizeFailoverChain,
   providerFailoverDecision,
+  usageExhaustedUntilMs,
   type FailoverDecision,
   type FailoverRun,
   type InstanceHealth,
@@ -213,7 +215,10 @@ const makeSweep = Effect.gen(function* () {
       return;
     }
     const health = new Map<string, InstanceHealth>();
+    // The usage reading the status already holds (no probe here); judged per thread's model.
+    const providers = new Map<string, ServerProvider>();
     for (const provider of yield* providerRegistry.getProviders) {
+      providers.set(provider.instanceId, provider);
       health.set(provider.instanceId, {
         usable:
           provider.enabled &&
@@ -283,7 +288,15 @@ const makeSweep = Effect.gen(function* () {
       });
     }
     let acted = false;
+    let wakeAt = Infinity;
     for (const state of states) {
+      const usageExhaustedUntil = new Map<string, number>();
+      for (const id of chain) {
+        const until = usageExhaustedUntilMs(providers.get(id), nowMs, state.modelSelection.model);
+        if (until === null) continue;
+        usageExhaustedUntil.set(id, until);
+        if (until > nowMs && until < wakeAt) wakeAt = until;
+      }
       const decision = providerFailoverDecision({
         chain,
         threadId: state.threadId,
@@ -293,6 +306,7 @@ const makeSweep = Effect.gen(function* () {
         noticedRunIds: state.noticedRunIds,
         health,
         exhaustedUntil,
+        usageExhaustedUntil,
         nowMs,
       });
       if (decision === null) continue;
@@ -314,7 +328,6 @@ const makeSweep = Effect.gen(function* () {
     }
     if (acted) return;
     // Wake when the next exhausted instance may be usable again, for the way back.
-    let wakeAt = Infinity;
     for (const until of exhaustedUntil.values()) {
       if (until > nowMs && until < wakeAt) wakeAt = until;
     }

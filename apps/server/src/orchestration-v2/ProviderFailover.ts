@@ -9,9 +9,11 @@ import type {
   OrchestrationV2Run,
   ProviderInstanceId,
   RunId,
+  ServerProvider,
   ThreadId,
 } from "@t3tools/contracts";
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
+import { exhaustedUsageWindow } from "@t3tools/shared/usageLimits";
 import * as DateTime from "effect/DateTime";
 
 /** Failure code the Claude adapter sets when the CLI reports authentication_failed ("Not logged in"). */
@@ -81,6 +83,41 @@ export function exhaustedUntilMs(
   );
 }
 
+/** Claude's model-scoped weekly windows ("Weekly · Fable") have ids like `seven_day_fable`. */
+const CLAUDE_SCOPED_WINDOW = /^seven_day_(.+)$/;
+
+/**
+ * Until when the instance's own usage reading makes it unusable, in epoch ms, or null. A window at
+ * 100 % that has not reset blocks it until its reset time (no reset time: the limit back-off).
+ * Unreadable limits (unsupported, probe failed) say nothing, so the instance stays a candidate.
+ * A Claude window scoped to one model family blocks only threads on that family.
+ */
+export function usageExhaustedUntilMs(
+  provider: Pick<ServerProvider, "driver" | "usageLimits"> | undefined,
+  nowMs: number,
+  model?: string,
+): number | null {
+  const limits = provider?.usageLimits;
+  if (limits === undefined || limits.unavailable !== undefined) return null;
+  const windows =
+    provider!.driver === "claudeAgent"
+      ? limits.windows.filter((window) => {
+          const scope = window.id.match(CLAUDE_SCOPED_WINDOW)?.[1];
+          if (scope === undefined || model === undefined) return true;
+          // The family is the scope's first word ("opus_4" -> opus), so a new version still counts.
+          return model.toLowerCase().includes(scope.split("_")[0]!);
+        })
+      : limits.windows;
+  const window = exhaustedUsageWindow(
+    { ...provider, usageLimits: { ...limits, windows } } as ServerProvider,
+    nowMs,
+    model,
+  );
+  if (window === undefined) return null;
+  const resetMs = window.resetsAt === undefined ? Number.NaN : Date.parse(window.resetsAt);
+  return Number.isFinite(resetMs) && resetMs > nowMs ? resetMs : nowMs + FAILOVER_LIMIT_BACKOFF_MS;
+}
+
 /** Parses the chain setting: known strings only, each once, in order. */
 export function normalizeFailoverChain(chain: ReadonlyArray<unknown>): ReadonlyArray<string> {
   const seen = new Set<string>();
@@ -118,8 +155,10 @@ export interface FailoverInput {
   /** Run ids that already carry a failover notice (switch or stop). */
   readonly noticedRunIds: ReadonlySet<string>;
   readonly health: ReadonlyMap<string, InstanceHealth>;
-  /** Instance id -> epoch ms until which it is exhausted. */
+  /** Instance id -> epoch ms until which it is exhausted, from its failed runs. */
   readonly exhaustedUntil: ReadonlyMap<string, number>;
+  /** Instance id -> epoch ms until which its usage reading shows a full window (usageExhaustedUntilMs). */
+  readonly usageExhaustedUntil: ReadonlyMap<string, number>;
   readonly nowMs: number;
 }
 
@@ -147,11 +186,16 @@ export type FailoverDecision =
 
 export function isInstanceUsable(
   instanceId: string,
-  input: Pick<FailoverInput, "health" | "exhaustedUntil" | "nowMs">,
+  input: Pick<FailoverInput, "health" | "exhaustedUntil" | "usageExhaustedUntil" | "nowMs">,
 ): boolean {
   if (input.health.get(instanceId)?.usable !== true) return false;
-  const until = input.exhaustedUntil.get(instanceId);
-  return until === undefined || until <= input.nowMs;
+  for (const until of [
+    input.exhaustedUntil.get(instanceId),
+    input.usageExhaustedUntil.get(instanceId),
+  ]) {
+    if (until !== undefined && until > input.nowMs) return false;
+  }
+  return true;
 }
 
 function latestExecuted(runs: ReadonlyArray<FailoverRun>): FailoverRun | null {
