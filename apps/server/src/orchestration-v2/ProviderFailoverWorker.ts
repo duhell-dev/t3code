@@ -30,9 +30,9 @@ import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
 import {
   exhaustionFromRun,
-  FAILOVER_CONTINUATION_TEXT,
   failoverCauseText,
   failoverContinuationMessageId,
+  failoverContinuationText,
   normalizeFailoverChain,
   providerFailoverDecision,
   type FailoverDecision,
@@ -172,7 +172,7 @@ const makeSweep = Effect.gen(function* () {
         commandId: CommandId.make(messageId),
         messageId: MessageId.make(messageId),
         threadId,
-        text: FAILOVER_CONTINUATION_TEXT,
+        text: failoverContinuationText(decision.from, decision.to, decision.cause),
         attachments: [],
         dispatchMode: { type: "start_immediately" },
         createdBy: "agent",

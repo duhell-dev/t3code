@@ -25,7 +25,10 @@ export const FAILOVER_BILLING_BACKOFF_MS = 30 * 60 * 1000;
 export const FAILOVER_LIMIT_BACKOFF_MS = 5 * 60 * 60 * 1000;
 
 const CONTINUATION_MESSAGE_PREFIX = "failover-continue:";
-export const FAILOVER_CONTINUATION_TEXT = "Continue where you left off.";
+/** The continuation after a switch. It names the switch: the handoff carries the old failure. */
+export function failoverContinuationText(from: string, to: string, cause: FailoverCause): string {
+  return `The previous provider instance ${from} stopped working because ${failoverCauseText(cause)}. This thread now runs on ${to}, which works. That failure is not part of your task; ignore it. Continue where you left off.`;
+}
 
 export type FailoverCause = "usage_limit" | "authentication" | "billing";
 
