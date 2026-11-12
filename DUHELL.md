@@ -14,8 +14,8 @@ instead. A merge conflict also opens an issue and changes nothing.
 
 ## Updating the installs
 
-Nothing updates itself. On pc1 the self-update timer (`t3up.timer`) is off: a new fork build is
-installed by hand, and only while no agents are working. When the private T3 gets a new version,
+Nothing updates itself. On pc1 the self-update timer (`t3up.timer`) is off; new fork builds are
+installed with the update button in the app. When the private T3 gets a new version,
 `t3-duell-nachziehen.path` brings the Duell T3 to the same version. pc2 is updated through its
 homelab orchestrator.
 
