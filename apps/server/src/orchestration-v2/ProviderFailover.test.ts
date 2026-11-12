@@ -25,7 +25,7 @@ import {
 } from "./ProviderFailover.ts";
 
 const threadId = ThreadId.make("thread-1");
-const chain = ["claudeAgent", "claudeNepo", "claudeGuthaben", "claudeGuthabenNepo"];
+const chain = ["claudeAgent", "claudeSubB", "claudeApiA", "claudeApiB"];
 const nowMs = Date.parse("2026-11-12T22:00:00.000Z");
 const at = (minutesBeforeNow: number) => DateTime.makeUnsafe(nowMs - minutesBeforeNow * 60_000);
 
@@ -130,14 +130,14 @@ describe("exhaustedUntilMs", () => {
 
   it("is recorded only for failed runs with an account failure", () => {
     assert.deepStrictEqual(
-      exhaustionFromRun(run(1, "claudeNepo", "failed", { failure: noCredit })),
+      exhaustionFromRun(run(1, "claudeSubB", "failed", { failure: noCredit })),
       {
-        instanceId: "claudeNepo",
+        instanceId: "claudeSubB",
         untilMs: DateTime.toEpochMillis(at(98)) + FAILOVER_AUTH_BACKOFF_MS,
       },
     );
-    assert.equal(exhaustionFromRun(run(1, "claudeNepo", "failed", { failure: otherError })), null);
-    assert.equal(exhaustionFromRun(run(1, "claudeNepo", "completed")), null);
+    assert.equal(exhaustionFromRun(run(1, "claudeSubB", "failed", { failure: otherError })), null);
+    assert.equal(exhaustionFromRun(run(1, "claudeSubB", "completed")), null);
   });
 });
 
@@ -230,7 +230,7 @@ describe("providerFailoverDecision", () => {
         type: "switch",
         failedRunId: RunId.make("run-1"),
         from: "claudeAgent",
-        to: "claudeNepo",
+        to: "claudeSubB",
         cause: failoverCause(failure)!,
       });
     }
@@ -239,8 +239,8 @@ describe("providerFailoverDecision", () => {
   it("prefers the cheapest usable instance in chain order", () => {
     const decision = providerFailoverDecision(
       input({
-        threadInstanceId: ProviderInstanceId.make("claudeGuthaben"),
-        runs: [run(1, "claudeGuthaben", "failed", { failure: noCredit })],
+        threadInstanceId: ProviderInstanceId.make("claudeApiA"),
+        runs: [run(1, "claudeApiA", "failed", { failure: noCredit })],
       }),
     );
     assert.equal(decision?.type === "switch" ? decision.to : null, "claudeAgent");
@@ -249,25 +249,25 @@ describe("providerFailoverDecision", () => {
   it("skips exhausted instances, and uses them again once the time has passed", () => {
     const runs = [run(1, "claudeAgent", "failed", { failure: limit })];
     const exhausted = providerFailoverDecision(
-      input({ runs, exhaustedUntil: new Map([["claudeNepo", nowMs + 1]]) }),
+      input({ runs, exhaustedUntil: new Map([["claudeSubB", nowMs + 1]]) }),
     );
-    assert.equal(exhausted?.type === "switch" ? exhausted.to : null, "claudeGuthaben");
+    assert.equal(exhausted?.type === "switch" ? exhausted.to : null, "claudeApiA");
     const expired = providerFailoverDecision(
-      input({ runs, exhaustedUntil: new Map([["claudeNepo", nowMs]]) }),
+      input({ runs, exhaustedUntil: new Map([["claudeSubB", nowMs]]) }),
     );
-    assert.equal(expired?.type === "switch" ? expired.to : null, "claudeNepo");
+    assert.equal(expired?.type === "switch" ? expired.to : null, "claudeSubB");
   });
 
   it("skips an instance whose usage shows a full window, until that window resets", () => {
     const runs = [run(1, "claudeAgent", "failed", { failure: limit })];
     const full = providerFailoverDecision(
-      input({ runs, usageExhaustedUntil: new Map([["claudeNepo", Date.parse(weeklyReset)]]) }),
+      input({ runs, usageExhaustedUntil: new Map([["claudeSubB", Date.parse(weeklyReset)]]) }),
     );
-    assert.equal(full?.type === "switch" ? full.to : null, "claudeGuthaben");
+    assert.equal(full?.type === "switch" ? full.to : null, "claudeApiA");
     const reset = providerFailoverDecision(
-      input({ runs, usageExhaustedUntil: new Map([["claudeNepo", nowMs]]) }),
+      input({ runs, usageExhaustedUntil: new Map([["claudeSubB", nowMs]]) }),
     );
-    assert.equal(reset?.type === "switch" ? reset.to : null, "claudeNepo");
+    assert.equal(reset?.type === "switch" ? reset.to : null, "claudeSubB");
   });
 
   it("skips unauthenticated, disabled and unknown instances", () => {
@@ -276,27 +276,27 @@ describe("providerFailoverDecision", () => {
         runs: [run(1, "claudeAgent", "failed", { failure: signedOut })],
         health: new Map([
           ["claudeAgent", { usable: true }],
-          ["claudeNepo", { usable: false }],
-          ["claudeGuthabenNepo", { usable: true }],
+          ["claudeSubB", { usable: false }],
+          ["claudeApiB", { usable: true }],
         ]),
       }),
     );
-    assert.equal(decision?.type === "switch" ? decision.to : null, "claudeGuthabenNepo");
+    assert.equal(decision?.type === "switch" ? decision.to : null, "claudeApiB");
   });
 
   it("moves one step per failed run and never back to a streak instance its failure still blocks", () => {
     const runs = [
       run(1, "claudeAgent", "failed", { failure: limit }),
-      run(2, "claudeNepo", "failed", { failure: limit, continues: 1 }),
+      run(2, "claudeSubB", "failed", { failure: limit, continues: 1 }),
     ];
     const decision = providerFailoverDecision(
-      input({ runs, threadInstanceId: ProviderInstanceId.make("claudeNepo") }),
+      input({ runs, threadInstanceId: ProviderInstanceId.make("claudeSubB") }),
     );
     assert.deepStrictEqual(decision, {
       type: "switch",
       failedRunId: RunId.make("run-2"),
-      from: "claudeNepo",
-      to: "claudeGuthaben",
+      from: "claudeSubB",
+      to: "claudeApiA",
       cause: "usage_limit",
     });
   });
@@ -304,18 +304,18 @@ describe("providerFailoverDecision", () => {
   it("stops once every chain instance failed in the streak", () => {
     const runs = [
       run(1, "claudeAgent", "failed", { failure: limit }),
-      run(2, "claudeNepo", "failed", { failure: limit, continues: 1 }),
-      run(3, "claudeGuthaben", "failed", { failure: spendCap, continues: 2 }),
-      run(4, "claudeGuthabenNepo", "failed", { failure: spendCap, continues: 3 }),
+      run(2, "claudeSubB", "failed", { failure: limit, continues: 1 }),
+      run(3, "claudeApiA", "failed", { failure: spendCap, continues: 2 }),
+      run(4, "claudeApiB", "failed", { failure: spendCap, continues: 3 }),
     ];
     const state = input({
       runs,
-      threadInstanceId: ProviderInstanceId.make("claudeGuthabenNepo"),
+      threadInstanceId: ProviderInstanceId.make("claudeApiB"),
     });
     assert.deepStrictEqual(providerFailoverDecision(state), {
       type: "stop",
       failedRunId: RunId.make("run-4"),
-      from: "claudeGuthabenNepo",
+      from: "claudeApiB",
       cause: "spend_limit",
       tried: chain,
     });
@@ -332,7 +332,7 @@ describe("providerFailoverDecision", () => {
       {
         type: "resume",
         failedRunId: RunId.make("run-4"),
-        from: "claudeGuthabenNepo",
+        from: "claudeApiB",
         to: "claudeAgent",
         cause: "spend_limit",
       },
@@ -342,25 +342,25 @@ describe("providerFailoverDecision", () => {
   it("starts over at the front once a streak instance's failure stopped blocking it", () => {
     const runs = [
       run(1, "claudeAgent", "failed", { failure: limit }),
-      run(2, "claudeNepo", "failed", { failure: limit, continues: 1 }),
-      run(3, "claudeGuthaben", "failed", { failure: noCredit, continues: 2 }),
-      run(4, "claudeGuthabenNepo", "failed", { failure: spendCap, continues: 3 }),
+      run(2, "claudeSubB", "failed", { failure: limit, continues: 1 }),
+      run(3, "claudeApiA", "failed", { failure: noCredit, continues: 2 }),
+      run(4, "claudeApiB", "failed", { failure: spendCap, continues: 3 }),
     ];
     // Run 3's credit back-off (30 min) has passed; the weekly limits have not reset.
     const decision = providerFailoverDecision(
-      input({ runs, threadInstanceId: ProviderInstanceId.make("claudeGuthabenNepo") }),
+      input({ runs, threadInstanceId: ProviderInstanceId.make("claudeApiB") }),
     );
-    assert.equal(decision?.type === "switch" ? decision.to : null, "claudeGuthaben");
+    assert.equal(decision?.type === "switch" ? decision.to : null, "claudeApiA");
   });
 
   it("starts a fresh walk after a message from the user", () => {
     const runs = [
       run(1, "claudeAgent", "failed", { failure: limit }),
-      run(2, "claudeNepo", "failed", { failure: limit, continues: 1 }),
-      run(3, "claudeNepo", "failed", { failure: limit }),
+      run(2, "claudeSubB", "failed", { failure: limit, continues: 1 }),
+      run(3, "claudeSubB", "failed", { failure: limit }),
     ];
     const decision = providerFailoverDecision(
-      input({ runs, threadInstanceId: ProviderInstanceId.make("claudeNepo") }),
+      input({ runs, threadInstanceId: ProviderInstanceId.make("claudeSubB") }),
     );
     assert.equal(decision?.type === "switch" ? decision.to : null, "claudeAgent");
   });
@@ -403,7 +403,7 @@ describe("providerFailoverDecision", () => {
     );
     assert.equal(
       providerFailoverDecision(
-        input({ runs, threadInstanceId: ProviderInstanceId.make("claudeNepo") }),
+        input({ runs, threadInstanceId: ProviderInstanceId.make("claudeSubB") }),
       ),
       null,
     );
@@ -412,15 +412,15 @@ describe("providerFailoverDecision", () => {
   describe("going back", () => {
     const moved = [
       run(1, "claudeAgent", "failed", { failure: limit }),
-      run(2, "claudeNepo", "failed", { failure: signedOut, continues: 1 }),
-      run(3, "claudeGuthaben", "completed", { continues: 2 }),
+      run(2, "claudeSubB", "failed", { failure: signedOut, continues: 1 }),
+      run(3, "claudeApiA", "completed", { continues: 2 }),
     ];
     const movedState = input({
       runs: moved,
-      threadInstanceId: ProviderInstanceId.make("claudeGuthaben"),
+      threadInstanceId: ProviderInstanceId.make("claudeApiA"),
       exhaustedUntil: new Map([
         ["claudeAgent", nowMs + 60_000],
-        ["claudeNepo", nowMs + 60_000],
+        ["claudeSubB", nowMs + 60_000],
       ]),
     });
 
@@ -431,12 +431,12 @@ describe("providerFailoverDecision", () => {
     it("returns to the first earlier instance that works again, between runs", () => {
       const decision = providerFailoverDecision({
         ...movedState,
-        exhaustedUntil: new Map([["claudeNepo", nowMs + 60_000]]),
+        exhaustedUntil: new Map([["claudeSubB", nowMs + 60_000]]),
       });
       assert.deepStrictEqual(decision, {
         type: "return",
         lastRunId: RunId.make("run-3"),
-        from: "claudeGuthaben",
+        from: "claudeApiA",
         to: "claudeAgent",
       });
     });
@@ -447,13 +447,13 @@ describe("providerFailoverDecision", () => {
         ...free,
         usageExhaustedUntil: new Map([["claudeAgent", Date.parse(weeklyReset)]]),
       });
-      assert.equal(decision?.type === "return" ? decision.to : null, "claudeNepo");
+      assert.equal(decision?.type === "return" ? decision.to : null, "claudeSubB");
       assert.equal(
         providerFailoverDecision({
           ...free,
           usageExhaustedUntil: new Map([
             ["claudeAgent", Date.parse(weeklyReset)],
-            ["claudeNepo", nowMs + 60_000],
+            ["claudeSubB", nowMs + 60_000],
           ]),
         }),
         null,
@@ -465,35 +465,35 @@ describe("providerFailoverDecision", () => {
       assert.equal(
         providerFailoverDecision({
           ...free,
-          runs: [...moved, run(4, "claudeGuthaben", "running")],
+          runs: [...moved, run(4, "claudeApiA", "running")],
         }),
         null,
       );
       assert.equal(
         providerFailoverDecision({
           ...free,
-          threadInstanceId: ProviderInstanceId.make("claudeGuthabenNepo"),
+          threadInstanceId: ProviderInstanceId.make("claudeApiB"),
         }),
         null,
       );
       assert.equal(
         providerFailoverDecision({
           ...free,
-          runs: [...moved, run(4, "claudeGuthabenNepo", "completed")],
+          runs: [...moved, run(4, "claudeApiB", "completed")],
         }),
         null,
       );
     });
 
     it("returns to the first usable instance of the whole chain, before where the thread started", () => {
-      const startedOnNepo = [
-        run(1, "claudeNepo", "failed", { failure: limit }),
-        run(2, "claudeGuthaben", "completed", { continues: 1 }),
+      const startedOnSecond = [
+        run(1, "claudeSubB", "failed", { failure: limit }),
+        run(2, "claudeApiA", "completed", { continues: 1 }),
       ];
       const decision = providerFailoverDecision(
         input({
-          runs: startedOnNepo,
-          threadInstanceId: ProviderInstanceId.make("claudeGuthaben"),
+          runs: startedOnSecond,
+          threadInstanceId: ProviderInstanceId.make("claudeApiA"),
         }),
       );
       assert.equal(decision?.type === "return" ? decision.to : null, "claudeAgent");

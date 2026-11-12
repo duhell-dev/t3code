@@ -2,7 +2,7 @@ name: Sync upstream
 
 on:
   schedule:
-    # Every 30 minutes (Kaan 2026-11-12: new upstream nightlies as fast as possible); a release builds only on a change.
+    # Every 30 minutes (new upstream nightlies as fast as possible); a release builds only on a change.
     - cron: "7,37 * * * *"
   workflow_dispatch:
 
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
-      # Leer, solange Kaan kein SYNC_TOKEN hinterlegt hat (siehe DUHELL.md).
+      # Leer, solange kein SYNC_TOKEN hinterlegt ist (siehe DUHELL.md).
       HAS_SYNC_TOKEN: ${{ secrets.SYNC_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
