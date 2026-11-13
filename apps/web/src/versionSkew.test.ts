@@ -14,6 +14,7 @@ import {
   isVersionMismatchDismissed,
   manualServerUpdateCommand,
   resolveVersionMismatch,
+  serverRunsTargetOrNewer,
 } from "./versionSkew";
 
 const MISMATCH_HINT =
@@ -102,6 +103,16 @@ describe("versionSkew", () => {
   // regression: #7579 versions were compared as strings, not semver
   it("treats a nightly server built past the client as ahead, not skew", () => {
     expect(resolveVersionMismatch("0.0.35-nightly.20260818.1124")).toBeNull();
+  });
+
+  it.each([
+    ["0.1.10-nightly.20261112.1000023", true],
+    ["0.1.10-nightly.20261112.1000021", true],
+    ["0.1.10-nightly.20261112.1000020", false],
+    ["0.1.11", true],
+    [undefined, false],
+  ] as const)("server %s already runs nightly target 1000021 or newer: %s", (server, expected) => {
+    expect(serverRunsTargetOrNewer(server, "0.1.10-nightly.20261112.1000021")).toBe(expected);
   });
 
   it("still warns when a nightly client outruns the server by a release", () => {

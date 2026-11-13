@@ -31,7 +31,7 @@ import { useServerConfigs } from "~/state/entities";
 import { useManagedPolicy } from "~/state/managedPolicy";
 import { environmentPresentations } from "~/state/presentation";
 import { ManagedControl } from "./ManagedPolicy";
-import { manualServerUpdateCommand } from "~/versionSkew";
+import { manualServerUpdateCommand, serverRunsTargetOrNewer } from "~/versionSkew";
 import { crossesReleaseTrack } from "@t3tools/shared/cliRelease";
 import { Button } from "./ui/button";
 import { toastManager } from "./ui/toast";
@@ -72,6 +72,16 @@ function refusedCrossing(
     target.selfUpdate !== null &&
     serverVersion !== undefined &&
     crossesReleaseTrack(serverVersion, target.targetVersion)
+  );
+}
+
+/** A track switch may move to a lower version; any other update to one is a downgrade. */
+function serverAlreadyAtTarget(
+  target: { readonly targetVersion: string; readonly channel?: DesktopUpdateChannel | undefined },
+  serverVersion: string | undefined,
+): boolean {
+  return (
+    target.channel === undefined && serverRunsTargetOrNewer(serverVersion, target.targetVersion)
   );
 }
 
@@ -126,7 +136,11 @@ export function useServerUpdate() {
       }
       return { status: "failed", message: denial };
     }
+    const serverVersion = appAtomRegistry
+      .get(environmentPresentations.serverConfigsAtom)
+      .get(environmentId)?.environment.serverVersion;
     if (
+      serverAlreadyAtTarget(target, serverVersion) ||
       !canUpdateServer(appAtomRegistry.get(environmentSession.sessionStateAtom(environmentId))) ||
       pendingUpdateEnvironmentIds.has(environmentId)
     )
@@ -182,13 +196,16 @@ export function ServerUpdatesAction({
   const serverConfigs = useServerConfigs();
   const pending = useRef(false);
   const [isPending, setIsPending] = useState(false);
-  const eligible = targets.filter(
-    (target) =>
+  const eligible = targets.filter((target) => {
+    const config = serverConfigs.get(target.environmentId);
+    return (
       target.selfUpdate !== null &&
       (target.selfUpdate !== "desktop-managed" || target.desktopAppUpdate) &&
-      managedUpdatesDenial(serverConfigs.get(target.environmentId)?.managedPolicy) === undefined &&
-      !refusedCrossing(target, serverConfigs.get(target.environmentId)?.environment.serverVersion),
-  );
+      managedUpdatesDenial(config?.managedPolicy) === undefined &&
+      !refusedCrossing(target, config?.environment.serverVersion) &&
+      !serverAlreadyAtTarget(target, config?.environment.serverVersion)
+    );
+  });
   const handleUpdate = async () => {
     if (pending.current) return;
     pending.current = true;
@@ -347,6 +364,12 @@ export function ServerUpdateAction({
 
   if (refusedCrossing({ selfUpdate, targetVersion, channel }, serverVersion)) {
     return <CrossTrackNote />;
+  }
+
+  if (serverAlreadyAtTarget({ targetVersion, channel }, serverVersion)) {
+    return (
+      <span className="text-muted-foreground text-xs">Server already runs {serverVersion}</span>
+    );
   }
 
   const manualCommand =

@@ -77,6 +77,17 @@ export function resolveVersionMismatch(
   };
 }
 
+/** The host refuses a downgrade, so a server already on or past the target gets no update. */
+export function serverRunsTargetOrNewer(
+  serverVersion: string | null | undefined,
+  targetVersion: string,
+): boolean {
+  return (
+    normalizeVersion(serverVersion) !== null &&
+    resolveVersionMismatch(serverVersion, targetVersion) === null
+  );
+}
+
 export function resolveServerConfigVersionMismatch(
   serverConfig: Pick<ServerConfig, "environment"> | null | undefined,
 ): VersionMismatch | null {

@@ -75,6 +75,13 @@ it("orders exact semantic versions without treating build metadata as precedence
   assert.equal(compareExactServiceVersions("1.2.3", "1.2.3"), 0);
   assert.equal(compareExactServiceVersions("1.2.4", "1.2.3"), 1);
   assert.equal(compareExactServiceVersions("2.0.0-alpha.1", "2.0.0-alpha.2"), -1);
+  assert.equal(
+    compareExactServiceVersions(
+      "0.1.10-nightly.20261112.1000021",
+      "0.1.10-nightly.20261112.1000023",
+    ),
+    -1,
+  );
   assert.equal(compareExactServiceVersions("2.0.0-alpha.2", "2.0.0-alpha.beta"), -1);
   assert.equal(compareExactServiceVersions("2.0.0-alpha-beta", "2.0.0-alpha-alpha"), 1);
   assert.equal(compareExactServiceVersions("2.0.0", "2.0.0-rc.1"), 1);

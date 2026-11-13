@@ -230,17 +230,23 @@ it.layer(NodeServices.layer)("server self update", (it) => {
   );
 
   // regression: #5181 make remote updates rollback-safe
-  it.effect("rejects invalid versions and desktop-managed servers before staging", () =>
+  it.effect("rejects invalid versions, downgrades and desktop-managed servers before staging", () =>
     Effect.gen(function* () {
       const web = yield* makeHarness();
       expect(
         (yield* web.selfUpdate.update({ targetVersion: "latest" }).pipe(Effect.flip)).reason,
       ).toBe("'latest' is not an exact t3 version.");
+      expect(
+        (yield* web.selfUpdate.update({ targetVersion: "0.0.1" }).pipe(Effect.flip)).reason,
+      ).toBe(
+        `This server already runs t3@${packageJson.version}, which is newer than t3@0.0.1; it stays on this release.`,
+      );
       const desktop = yield* makeHarness({ mode: "desktop" });
       expect(
         (yield* desktop.selfUpdate.update({ targetVersion: "1.1.0" }).pipe(Effect.flip)).reason,
       ).toContain("desktop app");
       expect([...web.order, ...desktop.order]).toEqual([]);
+      expect(web.urls).toEqual([]);
     }),
   );
 

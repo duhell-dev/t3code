@@ -45,7 +45,7 @@ import {
 import { bootServiceProgramOf, bootServiceUnitPath } from "./bootService.ts";
 import { decodeServicePreflightResult } from "./servicePreflight.ts";
 import * as ServiceLauncherClient from "./serviceLauncherClient.ts";
-import { isExactServiceVersion } from "./serviceProtocol.ts";
+import { compareExactServiceVersions, isExactServiceVersion } from "./serviceProtocol.ts";
 
 // A staged runtime's cold start can take over a minute on a loaded, swapping host.
 const PREFLIGHT_TIMEOUT = Duration.minutes(3);
@@ -212,6 +212,16 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
     const targetVersion = input.targetVersion.trim();
     if (!isExactServiceVersion(targetVersion)) {
       return yield* failWith(`'${targetVersion}' is not an exact t3 version.`);
+    }
+    // Its database may hold migrations the older release does not know; the preflight would only
+    // say so after the download. A track switch may land on a lower version and is checked above.
+    if (
+      !crossesReleaseTrack(packageJson.version, targetVersion) &&
+      compareExactServiceVersions(targetVersion, packageJson.version) < 0
+    ) {
+      return yield* failWith(
+        `This server already runs t3@${packageJson.version}, which is newer than t3@${targetVersion}; it stays on this release.`,
+      );
     }
     if (yield* Ref.getAndSet(inFlight, true)) {
       return yield* failWith("A server update is already in progress.");
