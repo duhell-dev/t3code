@@ -5,7 +5,11 @@ import {
 } from "@t3tools/client-runtime/state/thread-execution";
 import { checkpointFileTotals } from "@t3tools/client-runtime/state/thread-checkpoints";
 import { COMPACT_COMMAND_PATTERN } from "@t3tools/client-runtime/state/context-window";
-import { derivePendingBackgroundWork } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
+import {
+  derivePendingBackgroundWork,
+  pendingBackgroundTaskFromTurnItem,
+  pendingBackgroundTurnItems,
+} from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import {
   latestUnheldRun,
   usageLimitRunPresentedAsLatest,
@@ -1458,10 +1462,9 @@ export function presentThreadShellFromProjection(
 const LIVE_RUN_STATUSES = new Set(["queued", "preparing", "starting", "running"]);
 
 /**
- * Background work the provider still runs after an earlier run ended. It
- * stays listed while a later run is live; that live run's own items are its
- * foreground work, so they never count as background. The provider roster is
- * not run-tied, so it drops entries naming a live run's item by native id.
+ * Work an earlier run left running, plus delegated tasks of a live run, which outlive it as
+ * lineage shows. A live run's other items are its foreground work. The provider roster is not
+ * run-tied, so it drops entries naming a live run's item by native id.
  */
 export function deriveThreadPendingBackgroundTasks(projection: ThreadStructure | null) {
   if (projection === null) return [];
@@ -1497,6 +1500,16 @@ export function deriveThreadPendingBackgroundTasks(projection: ThreadStructure |
       runs: projection.runs,
       pullRequests: projection.thread.pullRequests,
     }),
+    ...pendingBackgroundTurnItems({
+      turnItems: projection.turnItems.filter(
+        (item) =>
+          item.type === "subagent" &&
+          item.origin === "app_owned" &&
+          item.runId !== null &&
+          liveRunIds.has(item.runId),
+      ),
+      runs: projection.runs,
+    }).map(pendingBackgroundTaskFromTurnItem),
   ];
 }
 

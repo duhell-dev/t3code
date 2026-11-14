@@ -1332,6 +1332,33 @@ describe("deriveThreadPendingBackgroundTasks", () => {
     ]);
   });
 
+  it("lists a live run's delegated tasks with an earlier run's, as lineage does", () => {
+    const delegated = (ordinal: number, id: string, status = "running") => ({
+      ...item(ordinal, "subagent", id, ""),
+      status,
+      origin: "app_owned",
+      prompt: id,
+    });
+    expect(
+      deriveThreadPendingBackgroundTasks(
+        projection({
+          runs: [run(1, "completed"), run(2, "running")],
+          turnItems: [
+            delegated(1, "earlier"),
+            delegated(2, "launched-now"),
+            delegated(2, "finished-now", "completed"),
+          ],
+        }),
+      ).map((task) => task.taskId),
+    ).toEqual(["earlier", "launched-now"]);
+    // The first run's delegated tasks count before any run has ended.
+    expect(
+      deriveThreadPendingBackgroundTasks(
+        projection({ runs: [run(1, "running")], turnItems: [delegated(1, "first")] }),
+      ).map((task) => task.taskId),
+    ).toEqual(["first"]);
+  });
+
   it("keeps an earlier run's roster-only monitor while a follow-up run executes", () => {
     // Claude completes the Monitor launch row on success; only the roster tracks the task.
     expect(

@@ -217,6 +217,12 @@ function nativeTaskIdFromTurnItem(item: PendingBackgroundWorkTurnItem): string {
   return String(item.id);
 }
 
+export function pendingBackgroundTaskFromTurnItem(
+  item: PendingBackgroundWorkTurnItem,
+): PendingBackgroundWorkTask {
+  return pendingTaskFromTurnItem(nativeTaskIdFromTurnItem(item), item);
+}
+
 /** Items Stop ends, without the pending list's settled-run gate. */
 export function pendingBackgroundTurnItems<Item extends PendingBackgroundWorkTurnItem>(input: {
   readonly turnItems: ReadonlyArray<Item>;
