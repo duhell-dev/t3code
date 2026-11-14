@@ -2,8 +2,8 @@ name: Sync upstream
 
 on:
   schedule:
-    # Every 30 minutes (new upstream nightlies as fast as possible); a release builds only on a change.
-    - cron: "7,37 * * * *"
+    # Every 2 hours (eigener Runner, schont ihn); a release builds only on a change.
+    - cron: "7 */2 * * *"
   workflow_dispatch:
 
 permissions:
@@ -16,10 +16,14 @@ concurrency:
   group: sync-upstream
   cancel-in-progress: false
 
+# Der einzige Job mit SYNC_TOKEN außer `tag` in duhell-release.yml. Er macht nur
+# git und gh: kein install, kein build, kein Skript aus dem Repo. Bleibt das so,
+# kann Code aus dem Original das Token nicht sehen.
 jobs:
   sync:
     if: github.repository != 'pingdotgg/t3code'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, t3code-runner]
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
       # Leer, solange kein SYNC_TOKEN hinterlegt ist (siehe DUHELL.md).

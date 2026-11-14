@@ -9,8 +9,17 @@
 # Update-Feed auf diesen Fork (GITHUB_REPOSITORY, scripts/build-desktop-artifact.ts).
 # Scheitert nur der Desktop-Bau, erscheint das Release ohne Installer.
 #
-# Kein npm, kein AUR, kein macOS/Linux-Desktop, kein Mobile, keine Signierung,
-# keine Geheimnisse außer dem Standard-GITHUB_TOKEN. Siehe DUHELL.md.
+# Kein npm, kein AUR, kein macOS/Linux-Desktop, kein Mobile, keine Signierung.
+#
+# Läuft auf dem eigenen Runner (ein frischer Container je Job). Jeder Bau führt
+# Code aus dem Original samt npm-Abhängigkeiten aus, daher:
+# - Bauende Jobs haben nur Leserechte und sehen kein Secret.
+# - SYNC_TOKEN steht nur im Job `tag`, der nichts aus dem Repo ausführt und
+#   keine Artefakte lädt (nur gh api).
+# - Nur `publish` darf schreiben; er lädt die fertigen Dateien hoch und führt
+#   ebenfalls keinen Repo-Code aus.
+# Windows wird nur auf Linux gebaut, ohne Prüflauf auf einem Windows-Rechner.
+# Siehe DUHELL.md.
 name: duHell Release
 
 on:
@@ -34,7 +43,7 @@ jobs:
   meta:
     name: Version festlegen
     if: github.repository == 'duhell-dev/t3code'
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, x64, t3code-runner]
     timeout-minutes: 5
     outputs:
       version: ${{ steps.v.outputs.version }}
@@ -65,7 +74,7 @@ jobs:
   bundle:
     name: JS-Bundle bauen
     needs: meta
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, x64, t3code-runner]
     timeout-minutes: 30
     outputs:
       clerk_publishable_key: ${{ steps.public_config.outputs.clerk_publishable_key }}
@@ -127,7 +136,7 @@ jobs:
   cli:
     name: CLI ${{ matrix.key }}
     needs: [meta, bundle]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, x64, t3code-runner]
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -138,7 +147,7 @@ jobs:
             arch: x64
             rust_target: x86_64-unknown-linux-gnu
             resource_key: linux-x64
-          # Wie das Original: auf Linux gebaut, auf Windows geprüft (Job verify_win).
+          # Auf Linux gebaut; einen Prüflauf auf Windows gibt es nicht mehr.
           - key: win32-x64
             platform: win
             arch: x64
@@ -243,25 +252,6 @@ jobs:
         if: matrix.platform == 'linux'
         run: node scripts/smoke-cli-archive.ts --archive release-cli/* --expect-version "$VERSION"
 
-      - name: Prüfskript für Windows bündeln
-        if: matrix.platform == 'win'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p verify
-          banner="import{createRequire as __cr}from'node:module';const require=__cr(import.meta.url);"
-          scripts/node_modules/.bin/esbuild scripts/smoke-cli-archive.ts --bundle --platform=node --format=esm \
-            --target=node24 --banner:js="$banner" --outfile=verify/smoke-cli-archive.mjs
-
-      - name: Prüfskript hochladen
-        if: matrix.platform == 'win'
-        uses: actions/upload-artifact@v7
-        with:
-          name: verify-win32-x64
-          path: verify/*
-          if-no-files-found: error
-          retention-days: 1
-
       - uses: actions/upload-artifact@v7
         with:
           name: cli-${{ matrix.key }}
@@ -270,30 +260,13 @@ jobs:
           compression-level: 0
           retention-days: 7
 
-  verify_win:
-    name: CLI win32-x64 auf Windows starten
-    needs: [meta, cli]
-    runs-on: windows-2025
-    timeout-minutes: 15
-    steps:
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-      - uses: actions/download-artifact@v8
-        with:
-          name: verify-win32-x64
-          path: verify
-      - uses: actions/download-artifact@v8
-        with:
-          name: cli-win32-x64
-          path: release-cli
-      - name: Smoke-Test
-        shell: bash
-        run: node verify/smoke-cli-archive.mjs --archive release-cli/* --expect-version "${{ needs.meta.outputs.version }}"
-
   # Windows-Installer über den Desktop-Workflow des Originals, unsigniert
   # (ohne Azure-Geheimnisse schaltet er die Signierung selbst ab). Wartet auf
   # den Linux-CLI-Job, dessen Archiv als WSL-Laufzeit in die App kommt.
+  # Ohne `secrets:` bekommt der Bau kein Secret (SYNC_TOKEN bleibt draußen), ohne
+  # verify_runner fällt sein Windows-Prüfjob weg. `runner` ist ein einzelner
+  # String (release-desktop.yml setzt ihn direkt in runs-on), daher nur das
+  # eindeutige Label des eigenen Runners.
   desktop_win:
     name: Desktop Windows x64
     needs: [meta, bundle, cli]
@@ -301,7 +274,6 @@ jobs:
       actions: read
       contents: read
     uses: ./.github/workflows/release-desktop.yml
-    secrets: inherit
     with:
       version: ${{ needs.meta.outputs.version }}
       ref: ${{ needs.meta.outputs.sha }}
@@ -312,8 +284,7 @@ jobs:
       clerk_cli_oauth_client_id: ${{ needs.bundle.outputs.clerk_cli_oauth_client_id }}
       relay_url: ${{ needs.bundle.outputs.relay_url }}
       label: Windows x64
-      runner: ubuntu-24.04
-      verify_runner: windows-2025
+      runner: t3code-runner
       platform: win
       target: nsis
       arch: x64
@@ -322,13 +293,49 @@ jobs:
       cli_archive: false
       save_pnpm_store: false
 
+  # Einziger Job mit SYNC_TOKEN: reine GitHub-API, kein Checkout, kein
+  # Artefakt, kein Repo-Code. Das Token braucht das Workflow-Recht, weil ein Tag
+  # auf einen Commit mit geänderten Original-Workflows sonst abgelehnt wird
+  # (185da9f14c). Erst nach allen Bauten, damit kein Tag ohne Release entsteht.
+  tag:
+    name: Tag anlegen
+    needs: [meta, cli, desktop_win]
+    if: ${{ !cancelled() && needs.cli.result == 'success' }}
+    runs-on: [self-hosted, linux, x64, t3code-runner]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      SHA: ${{ needs.meta.outputs.sha }}
+    steps:
+      # `gh release create --target <sha>` bekam mit dem Standard-Token 403
+      # (Lauf 43004071962), daher legt dieser Job den Tag über git/refs an und
+      # `publish` erstellt das Release danach mit --verify-tag.
+      - name: Tag anlegen
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ -n "$GH_TOKEN" ]] || { echo "SYNC_TOKEN fehlt (DUHELL.md)." >&2; exit 1; }
+          tag="v$VERSION"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag gibt es schon."
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$SHA" >/dev/null
+            echo "Tag $tag auf $SHA angelegt."
+          fi
+
   publish:
     name: Release veröffentlichen
-    needs: [meta, cli, verify_win, desktop_win]
+    needs: [meta, cli, desktop_win, tag]
     # Der Desktop-Bau darf scheitern; die CLI-Archive erscheinen trotzdem.
-    if: ${{ !cancelled() && needs.cli.result == 'success' && needs.verify_win.result == 'success' }}
-    runs-on: ubuntu-24.04
+    if: ${{ !cancelled() && needs.cli.result == 'success' && needs.tag.result == 'success' }}
+    runs-on: [self-hosted, linux, x64, t3code-runner]
     timeout-minutes: 10
+    # Einziger Job mit Schreibrecht. Lädt nur Artefakte und ruft gh auf,
+    # checkt nichts aus und führt keinen Repo-Code aus.
     permissions:
       contents: write
     env:
@@ -375,40 +382,6 @@ jobs:
           test -f "t3-$VERSION-win32-x64.zip"
           sha256sum "t3-$VERSION-linux-x64.tar.gz" "t3-$VERSION-win32-x64.zip" > SHA256SUMS
           cat SHA256SUMS
-
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.meta.outputs.sha }}
-          path: repo
-          sparse-checkout: DUHELL.md
-          sparse-checkout-cone-mode: false
-
-      # `gh release create --target <sha>` (Release legt den Tag selbst an) bekam
-      # mit dem Standard-Token 403 "Resource not accessible by integration"
-      # (Lauf 43004071962). Daher den Tag zuerst über git/refs anlegen und das
-      # Release danach mit --verify-tag. Wird auch das abgelehnt, zeigt der Tag
-      # auf einen leeren Hilfs-Commit (gleicher Baum, gebauter Commit als Elternteil).
-      - name: Tag anlegen
-        shell: bash
-        env:
-          # Ein Tag auf einen Commit mit geänderten Original-Workflows braucht das Workflow-Recht.
-          GH_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
-        run: |
-          set -euo pipefail
-          tag="v$VERSION"
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
-            echo "Tag $tag gibt es schon."
-          elif gh api -i -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$SHA" > ref.log 2>&1; then
-            echo "Tag $tag auf $SHA angelegt."
-          else
-            grep -iE '^HTTP|x-accepted-github-permissions|"message"' ref.log || cat ref.log
-            cd repo
-            git config user.name "duhell-release[bot]"
-            git config user.email "actions@users.noreply.github.com"
-            wrap="$(git commit-tree "$SHA^{tree}" -p "$SHA" -m "Release $tag (Baum von $SHA)")"
-            git push origin "$wrap:refs/tags/$tag"
-            echo "Tag $tag auf Hilfs-Commit $wrap (Baum von $SHA) angelegt."
-          fi
 
       - name: Release anlegen
         shell: bash
