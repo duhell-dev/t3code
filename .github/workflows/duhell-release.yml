@@ -62,7 +62,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base="$(node -p "require('./apps/desktop/package.json').version")"
+          # Ohne Node: der eigene Runner hat es erst nach setup-ci-deps.
+          base="$(sed -nE 's/^  "version": "([^"]+)",?$/\1/p' apps/desktop/package.json | head -n1)"
+          [[ -n "$base" ]] || { echo "Keine Version in apps/desktop/package.json" >&2; exit 1; }
           core="${base%%[-+]*}"
           IFS=. read -r major minor patch <<<"$core"
           version="${major}.${minor}.$((patch + 1))-nightly.$(date -u +%Y%m%d).$((1000000 + GITHUB_RUN_NUMBER))"
