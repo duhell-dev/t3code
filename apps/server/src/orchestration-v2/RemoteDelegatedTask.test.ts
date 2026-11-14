@@ -17,6 +17,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
+import * as SqlClient from "effect/sql/SqlClient";
 
 import { CodexProviderCapabilitiesV2 } from "./Adapters/CodexAdapterV2.ts";
 import * as EventSink from "./EventSink.ts";
@@ -342,6 +343,39 @@ it.layer(layerTest)("a delegated task in a linked environment", (it) => {
       assert.deepEqual(
         open.filter((entry) => entry.parentThreadId === parent.threadId),
         [{ parentThreadId: parent.threadId, taskId: task.id }],
+      );
+    }),
+  );
+
+  it.effect("is stopped with its parent when it is the parent's only delegated task", () =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const sql = yield* SqlClient.SqlClient;
+      const parent = yield* seedLiveParent("stopped-with-parent");
+      yield* orchestrator.dispatch({
+        type: "delegated_task.remote.request",
+        commandId: CommandId.make("command:remote-delegate:stopped-with-parent"),
+        parentThreadId: parent.threadId,
+        parentRunId: parent.runId,
+        parentNodeId: parent.rootNodeId,
+        task: "Run the suite there.",
+        driver: ProviderDriverKind.make("remote"),
+        modelSelection,
+        remoteChild,
+        completionWake: "always",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.stop",
+        commandId: CommandId.make("command:stop:stopped-with-parent"),
+        threadId: parent.threadId,
+      });
+      const walks = yield* sql<{ readonly command_id: string }>`
+        SELECT command_id FROM orchestration_v2_effect_outbox
+        WHERE effect_type = 'delegated-tasks.stop'
+      `;
+      assert.deepEqual(
+        walks.map((row) => row.command_id),
+        ["command:stop:stopped-with-parent"],
       );
     }),
   );
