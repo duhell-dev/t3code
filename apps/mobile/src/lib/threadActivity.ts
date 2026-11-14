@@ -1,3 +1,7 @@
+import {
+  foldProviderSwitchItems,
+  providerFailureSummary,
+} from "@t3tools/client-runtime/providerSwitch";
 import type {
   ThreadPendingApproval,
   ThreadPendingUserInput,
@@ -598,6 +602,10 @@ function itemSummary(
   if (item.type === "notification") return item.summary;
   if (item.type === "system_notice") return item.message;
   if (item.type === "compaction") return contextCompactionLabel(item);
+  if (item.type === "error") {
+    const summary = providerFailureSummary(item.failure);
+    if (summary !== null) return summary;
+  }
   const title =
     (item.type === "dynamic_tool"
       ? dynamicToolTitle(item.toolName, item.input, item.title)
@@ -691,8 +699,10 @@ function itemPreview(item: OrchestrationV2TurnItem): string | null {
     case "error":
       return item.failure.message;
     case "compaction":
-    case "handoff":
       return item.summary ?? null;
+    // The summary is the history handed to the model, not something to read in a row.
+    case "handoff":
+      return null;
     case "fork":
     case "thread_created":
       return item.targetThreadId;
@@ -2300,7 +2310,7 @@ function firstChangedIndex<T>(previous: ReadonlyArray<T>, next: ReadonlyArray<T>
 }
 
 export function buildThreadFeed(
-  visibleTurnItems: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
+  turnItems: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
   options?: {
     readonly anchoredMessages?: ReadonlyArray<LocalThreadMessage>;
     readonly attempts?: ReadonlyArray<OrchestrationV2RunAttempt>;
@@ -2309,6 +2319,8 @@ export function buildThreadFeed(
     readonly cache?: ThreadFeedCache;
   },
 ): ThreadFeedEntry[] {
+  // duHell: one row per provider failover step; see client-runtime providerSwitch.
+  const visibleTurnItems = foldProviderSwitchItems(turnItems);
   const anchoredMessages = options?.anchoredMessages ?? [];
   const attemptByRootNodeId = new Map(
     (options?.attempts ?? []).map((attempt) => [attempt.rootNodeId, attempt] as const),

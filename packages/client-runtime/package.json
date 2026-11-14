@@ -43,6 +43,10 @@
       "types": "./src/handoff.ts",
       "default": "./src/handoff.ts"
     },
+    "./providerSwitch": {
+      "types": "./src/providerSwitch.ts",
+      "default": "./src/providerSwitch.ts"
+    },
     "./device/stream": {
       "types": "./src/device/stream.ts",
       "default": "./src/device/stream.ts"

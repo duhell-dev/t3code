@@ -1,7 +1,7 @@
 import { ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { AgentElapsed } from "./AgentElapsed";
 import { projectedSubagentsToRuntime } from "@t3tools/client-runtime/state/subagentRuntime";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { useThreadShell, useProject } from "../../state/entities";
 import { useEnvironment } from "../../state/environments";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -20,6 +20,11 @@ import {
   type HandoffTimelineRun,
   resolveModelSwitchChange,
 } from "@t3tools/client-runtime/handoff";
+import {
+  failoverNoticeSignal,
+  providerSwitchDetail,
+  providerSwitchLabel,
+} from "@t3tools/client-runtime/providerSwitch";
 import { formatSubagentDisplayTitle } from "@t3tools/client-runtime/state/subagent-display";
 import {
   ProviderDriverKind,
@@ -84,6 +89,9 @@ export function V2LifecycleRow(props: {
         wrapDetail
       />
     );
+  }
+  if (item.type === "system_notice" && failoverNoticeSignal(item) !== null) {
+    return <ProviderSwitchRow environmentId={props.environmentId} item={item} runs={props.runs} />;
   }
   if (item.type === "handoff") {
     return (
@@ -596,6 +604,69 @@ function EnvironmentHandoffRow({
   const providers =
     useAtomValue(serverEnvironment.providersValueAtom(environmentId)) ?? EMPTY_SERVER_PROVIDERS;
   return <HandoffRow {...props} environmentId={environmentId} providers={providers} />;
+}
+
+/**
+ * duHell fork: one line per provider failover step, with display names. The failure, the
+ * handoffs and the agent's continuation fold into it and open on click.
+ */
+function ProviderSwitchRow(props: {
+  readonly environmentId: EnvironmentId;
+  readonly item: Extract<OrchestrationV2TurnItem, { type: "system_notice" }>;
+  readonly runs: ReadonlyArray<HandoffTimelineRun>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const providers =
+    useAtomValue(serverEnvironment.providersValueAtom(props.environmentId)) ??
+    EMPTY_SERVER_PROVIDERS;
+  const settings = useAtomValue(serverEnvironment.settingsValueAtom(props.environmentId));
+  const derived = deriveProviderInstanceEntries(providers);
+  const entries = settings ? applyProviderInstanceSettings(derived, settings, null) : derived;
+  const detail = providerSwitchDetail(props.item);
+  const label = providerSwitchLabel(
+    props.item.message,
+    (instanceId) =>
+      entries.find((entry) => entry.instanceId === instanceId)?.displayName ?? instanceId,
+  );
+  return (
+    <div data-v2-item-type="provider_switch">
+      <TimelineSystemDivider
+        label={label}
+        icon={ArrowRightLeftIcon}
+        tone={detail?.signal === "provider-failover-stop" ? "danger" : "neutral"}
+        actionLabel={expanded ? "Hide details" : "Show details"}
+        onAction={() => setExpanded(!expanded)}
+      />
+      {expanded ? (
+        <div className="mx-auto mb-2 flex max-w-xl flex-col gap-2 rounded-lg border border-border/60 px-3 py-2 text-muted-foreground text-xs">
+          {label !== props.item.message ? (
+            <p className="whitespace-pre-wrap break-words">{props.item.message}</p>
+          ) : null}
+          {detail?.failure ? (
+            <p className="whitespace-pre-wrap break-words">
+              <span className="font-medium text-foreground/80">Provider error: </span>
+              {detail.failure.message}
+            </p>
+          ) : null}
+          {detail?.handoffs.map((handoff) => (
+            <HandoffRow
+              key={handoff.id}
+              environmentId={props.environmentId}
+              endpoints={resolveHandoffEndpoints(handoff, props.runs)}
+              providers={providers}
+              failed={handoff.status === "failed"}
+            />
+          ))}
+          {detail?.continuation ? (
+            <p className="whitespace-pre-wrap break-words">
+              <span className="font-medium text-foreground/80">Sent to the agent: </span>
+              {detail.continuation}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /** Marks where `/clear` or an automation started a new provider session in this thread. */

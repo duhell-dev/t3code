@@ -1,3 +1,4 @@
+import { providerFailureSummary } from "@t3tools/client-runtime/providerSwitch";
 import { TimelinePendingApprovalRow } from "./TimelinePendingApprovalRow";
 import { WorkLogDetails, WorkLogRow } from "./WorkLog";
 import {
@@ -253,9 +254,29 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
     const resetTime = resetAt
       ? `${formatUpcomingTimestamp(resetAt, timestampFormat, undefined, timeZone)} (${timeZone})`
       : null;
+    // A known account or provider state reads as one line; its raw text opens on click.
+    const summary = warning ? null : providerFailureSummary(failureItem.failure);
     const label = warning
       ? `Usage limit reached.${resetTime ? ` Retry after ${resetTime}.` : ""}`
-      : workEntry.label;
+      : (summary ?? workEntry.label);
+    const rawToggleProps =
+      summary === null
+        ? {}
+        : {
+            role: "button" as const,
+            tabIndex: 0 as const,
+            "aria-expanded": expanded,
+            onClick: toggleExpanded,
+            onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+              if (
+                event.target === event.currentTarget &&
+                (event.key === "Enter" || event.key === " ")
+              ) {
+                event.preventDefault();
+                toggleExpanded();
+              }
+            },
+          };
     const retryRunId =
       failureItem.runId !== null &&
       retryableWorkspacePreparationRunIds.has(failureItem.runId) &&
@@ -266,6 +287,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
       <WorkLogRow
         data-v2-item-type="error"
         data-v2-item-visibility={workEntry.projectedItem?.visibility}
+        {...rawToggleProps}
         wrapLabel
         icon={
           <CircleAlertIcon
@@ -287,7 +309,7 @@ function WorkEntryLogRow(props: WorkEntryRowProps) {
           />
         }
       >
-        {!warning ? (
+        {!warning && (summary === null || expanded) ? (
           <p className="ms-7 whitespace-pre-wrap break-words py-1 text-sm leading-relaxed text-foreground/80">
             {failureItem.failure.message}
           </p>

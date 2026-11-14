@@ -17,6 +17,7 @@ import {
   FAILOVER_LIMIT_BACKOFF_MS,
   failoverCause,
   failoverContinuationMessageId,
+  failoverNoticeText,
   normalizeFailoverChain,
   providerFailoverDecision,
   usageExhaustedUntilMs,
@@ -111,6 +112,29 @@ describe("failoverCause", () => {
     assert.equal(failoverCause(noCredit), "billing");
     assert.equal(failoverCause(otherError), null);
     assert.equal(failoverCause(null), null);
+  });
+});
+
+describe("failoverNoticeText", () => {
+  it("names the switch with display names and a short reason", () => {
+    assert.equal(
+      failoverNoticeText({
+        type: "switch",
+        from: "Main plan",
+        to: "API key",
+        cause: "usage_limit",
+      }),
+      "Switched to API key: usage limit reached on Main plan",
+    );
+    assert.equal(
+      failoverNoticeText({ type: "stop", from: "API key", cause: "billing" }),
+      "Failover stopped: out of API credit on API key, and no other account is usable",
+    );
+    assert.equal(failoverNoticeText({ type: "return", to: "Main plan" }), "Back on Main plan");
+    assert.equal(
+      failoverNoticeText({ type: "resume", to: "Main plan" }),
+      "Back on Main plan: usable again",
+    );
   });
 });
 

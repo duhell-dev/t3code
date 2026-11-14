@@ -1,3 +1,4 @@
+import { foldProviderSwitchItems } from "@t3tools/client-runtime/providerSwitch";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { type ComponentProps, useLayoutEffect } from "react";
 import { useIncrementalTimelineEntries } from "../../hooks/useIncrementalTimelineEntries";
@@ -35,7 +36,7 @@ export function ThreadTimeline({
   syncing: boolean;
   detailLoading: boolean;
 }) {
-  const visibleTurnItems = useTimelineVisibleTurnItems(threadDetailRef);
+  const visibleTurnItems = foldProviderSwitchItems(useTimelineVisibleTurnItems(threadDetailRef));
   const serverEntries = useIncrementalTimelineEntries(activeThreadKey, {
     ...entriesInput,
     visibleTurnItems,

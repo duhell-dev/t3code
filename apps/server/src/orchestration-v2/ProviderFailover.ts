@@ -55,7 +55,7 @@ export function failoverCause(
   return null;
 }
 
-export function failoverCauseText(cause: FailoverCause): string {
+function failoverCauseText(cause: FailoverCause): string {
   switch (cause) {
     case "usage_limit":
       return "its usage limit is reached";
@@ -65,6 +65,47 @@ export function failoverCauseText(cause: FailoverCause): string {
       return "its API credit is used up";
     case "spend_limit":
       return "its API spend limit is reached";
+  }
+}
+
+/** The reason a switch line names, short enough for one timeline row. */
+function failoverCauseLabel(cause: FailoverCause): string {
+  switch (cause) {
+    case "usage_limit":
+      return "usage limit reached";
+    case "authentication":
+      return "signed out";
+    case "billing":
+      return "out of API credit";
+    case "spend_limit":
+      return "API spend limit reached";
+  }
+}
+
+/**
+ * The one line a user reads for a failover step, with display names instead of instance ids.
+ * Clients that do not know failover show it as is, so it has to stand alone.
+ */
+export function failoverNoticeText(
+  step:
+    | {
+        readonly type: "switch";
+        readonly from: string;
+        readonly to: string;
+        readonly cause: FailoverCause;
+      }
+    | { readonly type: "stop"; readonly from: string; readonly cause: FailoverCause }
+    | { readonly type: "resume" | "return"; readonly to: string },
+): string {
+  switch (step.type) {
+    case "switch":
+      return `Switched to ${step.to}: ${failoverCauseLabel(step.cause)} on ${step.from}`;
+    case "stop":
+      return `Failover stopped: ${failoverCauseLabel(step.cause)} on ${step.from}, and no other account is usable`;
+    case "resume":
+      return `Back on ${step.to}: usable again`;
+    case "return":
+      return `Back on ${step.to}`;
   }
 }
 

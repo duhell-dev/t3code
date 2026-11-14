@@ -178,6 +178,15 @@ describe("V2 session presentation", () => {
         retry: { ...retryItem.retry, attempt: 10 },
         completedAt: now,
       }),
+    ).toMatchObject({ label: "The provider is overloaded after 10/10 retries" });
+    expect(
+      providerErrorPresentation({
+        ...retryItem,
+        status: "failed",
+        retry: { ...retryItem.retry, attempt: 10 },
+        failure: { ...retryItem.failure, message: "Claude API failed." },
+        completedAt: now,
+      }),
     ).toMatchObject({ label: "Provider error after 10/10 retries" });
   });
 

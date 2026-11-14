@@ -1,3 +1,7 @@
+import {
+  failoverNoticeSignal,
+  providerFailureSummary,
+} from "@t3tools/client-runtime/providerSwitch";
 import type { ThreadStructureRuntime } from "@t3tools/client-runtime/state/shell";
 import { resolveThreadWorkingStartedAt } from "@t3tools/client-runtime/state/models";
 import {
@@ -299,12 +303,13 @@ function projectedWorkEntryTone(item: OrchestrationV2TurnItem): WorkLogEntry["to
 export function providerErrorPresentation(
   item: Extract<OrchestrationV2TurnItem, { readonly type: "error" }>,
 ): { readonly label: string; readonly detail: string } {
+  const summary = providerFailureSummary(item.failure);
   if (item.retry === undefined) {
     return {
       label:
         item.failure.class === "usage_limit"
           ? "Usage limit reached"
-          : item.title?.trim() || "Provider error",
+          : (summary ?? (item.title?.trim() || "Provider error")),
       detail: item.failure.message,
     };
   }
@@ -318,7 +323,7 @@ export function providerErrorPresentation(
       : item.status === "completed"
         ? `Provider recovered (${progress} retries)`
         : item.status === "failed"
-          ? `${item.failure.class === "usage_limit" ? "Usage limit reached" : "Provider error"} after ${progress} retries`
+          ? `${item.failure.class === "usage_limit" ? "Usage limit reached" : (summary ?? "Provider error")} after ${progress} retries`
           : `Provider retry stopped (${progress})`;
   const retryDelay =
     item.status === "running" && item.retry.retryDelayMs !== null && item.retry.retryDelayMs > 0
@@ -668,7 +673,7 @@ export function deriveTimelineEntriesFromVisibleTurnItems(
       continue;
     }
 
-    if (STANDALONE_V2_ITEM_TYPES.has(item.type)) {
+    if (STANDALONE_V2_ITEM_TYPES.has(item.type) || failoverNoticeSignal(item) !== null) {
       entries.push({
         id: item.id,
         kind: "event",

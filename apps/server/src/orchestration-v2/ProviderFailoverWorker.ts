@@ -31,9 +31,9 @@ import * as ProjectionStore from "./ProjectionStore.ts";
 import * as ThreadManagement from "./ThreadManagementService.ts";
 import {
   exhaustionFromRun,
-  failoverCauseText,
   failoverContinuationMessageId,
   failoverContinuationText,
+  failoverNoticeText,
   failoverResumeText,
   normalizeFailoverChain,
   providerFailoverDecision,
@@ -128,11 +128,16 @@ const makeSweep = Effect.gen(function* () {
     readonly decision: FailoverDecision;
     readonly runs: ReadonlyMap<string, OrchestrationV2Run>;
     readonly modelSelection: OrchestrationV2Run["modelSelection"];
+    readonly displayName: (instanceId: string) => string;
   }) {
-    const { decision, threadId } = input;
+    const { decision, threadId, displayName } = input;
     if (decision.type === "stop") {
       const run = input.runs.get(decision.failedRunId)!;
-      const message = `Provider failover stopped: ${decision.from} failed because ${failoverCauseText(decision.cause)}, and no other instance of the failover chain is usable (tried here: ${decision.tried.join(", ")}). The thread stays on ${decision.from}.`;
+      const message = failoverNoticeText({
+        type: "stop",
+        from: displayName(decision.from),
+        cause: decision.cause,
+      });
       yield* Effect.logWarning("orchestration-v2.provider-failover.stopped", {
         threadId,
         runId: decision.failedRunId,
@@ -174,7 +179,7 @@ const makeSweep = Effect.gen(function* () {
         run,
         signal: "provider-failover-resume",
         title: "Provider failover: resumed",
-        message: `Resumed on ${decision.to}: it is usable again after the failover had stopped on ${decision.from}.`,
+        message: failoverNoticeText({ type: "resume", to: displayName(decision.to) }),
       });
       const messageId = failoverContinuationMessageId(threadId, decision.failedRunId);
       yield* threads.dispatch({
@@ -210,7 +215,12 @@ const makeSweep = Effect.gen(function* () {
         run,
         signal: "provider-failover",
         title: "Provider failover",
-        message: `Switched from ${decision.from} to ${decision.to} because ${decision.from} failed: ${failoverCauseText(decision.cause)}. Continuing there.`,
+        message: failoverNoticeText({
+          type: "switch",
+          from: displayName(decision.from),
+          to: displayName(decision.to),
+          cause: decision.cause,
+        }),
       });
       const messageId = failoverContinuationMessageId(threadId, decision.failedRunId);
       yield* threads.dispatch({
@@ -243,7 +253,7 @@ const makeSweep = Effect.gen(function* () {
       run,
       signal: "provider-failover-return",
       title: "Provider failover: back",
-      message: `Switched back from ${decision.from} to ${decision.to} because ${decision.to} is usable again. The next run starts there.`,
+      message: failoverNoticeText({ type: "return", to: displayName(decision.to) }),
     });
   });
 
@@ -375,6 +385,7 @@ const makeSweep = Effect.gen(function* () {
         decision,
         runs: new Map(state.runs.map((run) => [run.id as string, run])),
         modelSelection: state.modelSelection,
+        displayName: (instanceId) => providers.get(instanceId)?.displayName ?? instanceId,
       }).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("orchestration-v2.provider-failover.failed", {
