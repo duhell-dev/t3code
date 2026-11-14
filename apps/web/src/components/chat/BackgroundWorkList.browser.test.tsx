@@ -12,7 +12,7 @@ import { render } from "../../../test/render";
 import { backgroundWorkNowItem } from "./ThreadActivityBanners";
 import { ThreadNow } from "./ThreadNow";
 
-it("opens full command details for short labels and keeps pending tasks current", async () => {
+it("expands to the full command for short labels and keeps pending tasks current", async () => {
   const command = "python3 audit.py -j 6\n> scratch/audit.log 2>&1";
   const commandItem = (status: "running" | "completed") => ({
     id: TurnItemId.make("bash-1"),
@@ -68,6 +68,7 @@ it("opens full command details for short labels and keeps pending tasks current"
             ordinal: 2,
           },
         ],
+        runIsLive: false,
         stopDisabled: false,
         stopping: false,
         onStop: async () => undefined,
@@ -76,22 +77,23 @@ it("opens full command details for short labels and keeps pending tasks current"
     />
   );
   await using screen = await render(view("Audit"));
-  await screen.getByRole("button", { name: "Details", exact: true }).click();
-  await vi.waitFor(() => expect(page.getByRole("dialog").element().textContent).toContain(command));
+  const list = page.getByRole("list", { name: "Background work" });
+  await expect.element(list).not.toBeInTheDocument();
+  await screen.getByRole("button", { name: "Waiting · Audit" }).click();
+  await vi.waitFor(() => expect(list.element().textContent).toContain("> scratch/audit.log"));
   await expect.element(page.getByText("Command output stream")).not.toBeInTheDocument();
 
+  // A label that is the command's first line still shows the rest of it.
   await screen.rerender(view(command));
-  await expect.element(page.getByRole("heading", { name: "Command", exact: true })).toBeVisible();
+  await vi.waitFor(() => expect(list.element().textContent).toContain("> scratch/audit.log"));
   await screen.rerender(view());
-  await expect.element(page.getByRole("heading", { name: "Command", exact: true })).toBeVisible();
+  await vi.waitFor(() => expect(list.element().textContent).toContain("> scratch/audit.log"));
 
   await screen.rerender(view("Check remaining modules", "running"));
-  await expect
-    .element(page.getByRole("heading", { name: "Check remaining modules" }))
-    .toBeVisible();
+  await expect.element(list.getByText("Check remaining modules")).toBeVisible();
   await expect.element(page.getByText("Command output stream")).toBeVisible();
   await screen.rerender(view("Native fallback", "completed", false));
   await expect.element(page.getByText("Command output stream")).toBeVisible();
-  await page.getByRole("button", { name: "Close", exact: true }).click();
-  await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
+  await screen.getByRole("button", { name: "Waiting · Native fallback" }).click();
+  await expect.element(list).not.toBeInTheDocument();
 });

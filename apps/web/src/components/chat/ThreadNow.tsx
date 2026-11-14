@@ -1,5 +1,5 @@
-import { RefreshCwIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { ChevronRightIcon, RefreshCwIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
 import { threadSyncLabel, type ThreadSyncPhase } from "../../threadSync";
 import { cn } from "~/lib/utils";
@@ -12,6 +12,8 @@ export interface ThreadNowItem {
   readonly title: ReactNode;
   readonly description?: ReactNode;
   readonly actions?: ReactNode;
+  /** Shown below the line when its title is expanded; the title then never truncates into a popup. */
+  readonly details?: ReactNode;
 }
 
 /** Matches ThreadStatusLine, so every line at the end of the timeline reads as one family. */
@@ -33,37 +35,71 @@ function ThreadNowLine({
   /** Announces the line when it appears; only for something that needs the user. */
   readonly announce?: boolean;
 }) {
-  return (
-    <div
-      role={announce ? "alert" : undefined}
-      className={cn(lineClassName, "items-baseline")}
-      data-thread-now-line="true"
-    >
-      <span aria-hidden className="flex size-3.5 shrink-0 self-center items-center justify-center">
-        {item.icon}
-      </span>
-      {/* Title and detail read as one line that gives way before the actions, so Stop stays
-          reachable; when it is cut, its details button shows all of it. */}
-      <NoticeText
-        detailsLabel={
-          typeof item.title === "string" ? `Show details: ${item.title}` : "Show details"
-        }
-        className="min-w-0 truncate"
-      >
-        {item.title}
-        {item.description ? (
-          <>
-            {" "}
-            <span className="ms-0.5 text-muted-foreground/60 light:text-muted-foreground/80">
-              {item.description}
-            </span>
-          </>
-        ) : null}
-      </NoticeText>
-      {item.actions ? (
-        <span className="ms-1.5 flex shrink-0 items-baseline gap-2.5">{item.actions}</span>
+  const [expanded, setExpanded] = useState(false);
+  const text = (
+    <>
+      {item.title}
+      {item.description ? (
+        <>
+          {" "}
+          <span className="ms-0.5 text-muted-foreground/60 light:text-muted-foreground/80">
+            {item.description}
+          </span>
+        </>
       ) : null}
-    </div>
+    </>
+  );
+  return (
+    <>
+      <div
+        role={announce ? "alert" : undefined}
+        className={cn(lineClassName, "items-baseline")}
+        data-thread-now-line="true"
+      >
+        <span
+          aria-hidden
+          className="flex size-3.5 shrink-0 self-center items-center justify-center"
+        >
+          {item.icon}
+        </span>
+        {/* Title and detail read as one line that gives way before the actions, so Stop stays
+            reachable; when it is cut, its details button or expanded list shows all of it. */}
+        {item.details ? (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((open) => !open)}
+            className="flex min-w-0 cursor-pointer items-baseline gap-1 text-start hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <span className="min-w-0 truncate">{text}</span>
+            <ChevronRightIcon
+              aria-hidden
+              className={cn(
+                "self-center transition-transform motion-reduce:transition-none",
+                expanded && "rotate-90",
+              )}
+            />
+          </button>
+        ) : (
+          <NoticeText
+            detailsLabel={
+              typeof item.title === "string" ? `Show details: ${item.title}` : "Show details"
+            }
+            className="min-w-0 truncate"
+          >
+            {text}
+          </NoticeText>
+        )}
+        {item.actions ? (
+          <span className="ms-1.5 flex shrink-0 items-baseline gap-2.5">{item.actions}</span>
+        ) : null}
+      </div>
+      {item.details && expanded ? (
+        <div className="mx-auto w-full min-w-0 max-w-(--chat-content-max-width) px-1 pb-2">
+          {item.details}
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -95,7 +131,7 @@ export function ThreadNow({
   return (
     <>
       {attention ? <ThreadNowLine item={attention} announce /> : null}
-      {work ? <ThreadNowLine item={work} /> : null}
+      {work ? <ThreadNowLine key={work.id} item={work} /> : null}
       {syncPhase ? <ThreadSyncLine phase={syncPhase} /> : null}
       {goal ? <ThreadNowLine item={goal} /> : null}
     </>

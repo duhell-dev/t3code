@@ -936,6 +936,20 @@ export default function ChatView(props: ChatViewProps) {
           }),
     };
   })();
+  const linkOriginLabel = serverThread?.linkOrigin?.label ?? null;
+  const delegatedFromLabel = delegatedFromEnvironment?.label ?? linkOriginLabel;
+  const headerThreadOrigin =
+    delegatedFrom !== null && delegatedFromLabel !== null
+      ? {
+          badge: `Delegated from ${delegatedFromLabel}`,
+          detail: `An agent in “${delegatedFromThread?.title ?? delegatedFrom.title}” on ${delegatedFromLabel} started this thread.`,
+        }
+      : linkOriginLabel !== null
+        ? {
+            badge: `From ${linkOriginLabel}`,
+            detail: `Started by an agent on ${linkOriginLabel} through a linked environment.`,
+          }
+        : null;
   // The header's breadcrumb opens a parent in this environment only.
   const headerParentThreadLink =
     parentSubagentThreadRef === null
@@ -3344,7 +3358,7 @@ export default function ChatView(props: ChatViewProps) {
               activeThreadId={activeThread.id}
               isServerThread={isServerThread}
               activeThreadTitle={activeThread.title}
-              activeThreadLinkOrigin={activeThreadShell?.linkOrigin?.label ?? null}
+              activeThreadOrigin={headerThreadOrigin}
               activeProject={activeProject ?? null}
               parentThreadLink={headerParentThreadLink}
               onOpenThread={onOpenRelatedThreadStable}

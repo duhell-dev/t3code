@@ -47,7 +47,8 @@ interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   activeThreadTitle: string;
-  activeThreadLinkOrigin?: string | null | undefined;
+  /** Where an agent started this thread from, for a thread a linked environment started. */
+  activeThreadOrigin?: { readonly badge: string; readonly detail: string } | null | undefined;
   isServerThread: boolean;
   activeProject: EnvironmentProject | null;
   parentThreadLink: { threadId: ThreadId; title: string } | null;
@@ -72,7 +73,7 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadEnvironmentId,
   activeThreadId,
   activeThreadTitle,
-  activeThreadLinkOrigin,
+  activeThreadOrigin,
   isServerThread,
   activeProject,
   parentThreadLink,
@@ -381,14 +382,12 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
-          {renamingTitle === null && activeThreadLinkOrigin ? (
+          {renamingTitle === null && activeThreadOrigin ? (
             <Tooltip>
               <TooltipTrigger render={<Badge variant="info" size="sm" />}>
-                From {activeThreadLinkOrigin}
+                {activeThreadOrigin.badge}
               </TooltipTrigger>
-              <TooltipPopup side="top">
-                Started by an agent on {activeThreadLinkOrigin} through a linked environment.
-              </TooltipPopup>
+              <TooltipPopup side="top">{activeThreadOrigin.detail}</TooltipPopup>
             </Tooltip>
           ) : null}
         </WorkspaceBreadcrumbItem>

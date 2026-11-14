@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { Fragment } from "react";
 import { tickTextContent } from "~/lib/tickTextContent";
-import { BackgroundWorkDetails } from "./BackgroundWorkDetails";
+import { BackgroundWorkList, type BackgroundWorkRow } from "./BackgroundWorkList";
 import { Button, InlineButton } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
@@ -173,69 +173,64 @@ export function backgroundWorkNowItem(input: {
   readonly threadId: ThreadId;
   readonly tasks: ReadonlyArray<OrchestrationV2PendingBackgroundTask>;
   readonly turnItems: ThreadStructure["turnItems"];
+  /** The run is live; the composer's Stop ends it with this work, so the line offers none. */
+  readonly runIsLive: boolean;
   readonly stopDisabled: boolean;
   readonly stopping: boolean;
   readonly onStop: () => Promise<void>;
-  readonly onOpenThread: (threadId: ThreadId) => void;
+  readonly onOpenThread: (threadId: ThreadId, environmentId?: EnvironmentId) => void;
 }): ThreadNowItem | null {
   const { onOpenThread } = input;
   const presentation = presentPendingBackgroundWork(input.tasks);
   if (presentation === null) return null;
-  const rows = presentation.items.map((task) => {
+  const rows = presentation.items.map((task): BackgroundWorkRow => {
     // Same key derivePendingBackgroundWork gives turn-item tasks; subagent items carry progress.
     const item = input.turnItems.findLast(
       (candidate) => (candidate.nativeItemRef?.nativeId || candidate.id) === task.taskId,
     );
     const subagent = item?.type === "subagent" ? item : undefined;
+    const pending = input.tasks.find((candidate) => candidate.taskId === task.taskId)!;
     return {
-      task,
+      task: pending,
+      labelText: task.label,
       label:
         item?.type === "command_execution" && commandDisplayText(item.input) === task.label ? (
-          <span className="font-mono in-data-[slot=popover-popup]:whitespace-pre-wrap">
-            {task.label}
-          </span>
-        ) : task.label.includes("\n") ? (
-          <span className="in-data-[slot=popover-popup]:whitespace-pre-wrap">{task.label}</span>
+          <span className="font-mono">{task.label}</span>
         ) : (
           task.label
         ),
       activity: subagent?.progress?.replace(/\s+/gu, " ").trim() || null,
       startedAtMs: item?.startedAt ? DateTime.toEpochMillis(item.startedAt) : null,
-      updatedAtMs: subagent ? DateTime.toEpochMillis(subagent.updatedAt) : 0,
       childThreadId: task.childThreadId ?? subagent?.childThreadId ?? undefined,
+      remoteChild: subagent?.remoteChild,
     };
   });
   const [only] = rows.length === 1 ? rows : [];
-  const newest = rows
-    .filter((row) => row.activity)
-    .toSorted((left, right) => right.updatedAtMs - left.updatedAtMs)[0];
-  const isCommand = (row: (typeof rows)[number]) => row.task.kind !== "subagent";
-  const onlyThreadId = only?.childThreadId;
+  const isCommand = (row: BackgroundWorkRow) => row.task.kind !== "subagent";
   const startedAtMs = only?.startedAtMs ?? null;
+  const onlyThreadId = only?.childThreadId;
+  const stopLabel = input.stopping ? "Stopping..." : "Stop all";
   return {
     id: `background-work:${input.threadId}`,
     icon: rows.every(isCommand) ? <TerminalIcon /> : <CircleDashedIcon />,
+    // The count names the work; the expanded list names each task once.
     title:
-      only && typeof only.label !== "string" && only.task.label !== only.task.kind ? (
+      only && typeof only.label !== "string" ? (
         <>
           {presentation.waiting ? "Waiting" : "Running"} · {only.label}
         </>
       ) : (
         presentation.title
       ),
-    description: only ? (
-      only.activity
-    ) : newest ? (
-      <>
-        {newest.label}: {newest.activity}
-      </>
-    ) : (
-      rows.map((row, index) => (
-        <Fragment key={row.task.taskId}>
-          {index > 0 ? ", " : null}
-          {row.label}
-        </Fragment>
-      ))
+    description: only?.activity ?? undefined,
+    details: (
+      <BackgroundWorkList
+        environmentId={input.environmentId}
+        threadId={input.threadId}
+        rows={rows}
+        turnItems={input.turnItems}
+        onOpenThread={onOpenThread}
+      />
     ),
     actions: (
       <>
@@ -248,21 +243,26 @@ export function backgroundWorkNowItem(input: {
             className="tabular-nums"
           />
         )}
-        <BackgroundWorkDetails
-          environmentId={input.environmentId}
-          threadId={input.threadId}
-          tasks={input.tasks}
-          turnItems={input.turnItems}
-          onOpenThread={onOpenThread}
-        />
         {onlyThreadId === undefined ? null : (
           <InlineButton tone="muted" onClick={() => onOpenThread(onlyThreadId)}>
             Open
           </InlineButton>
         )}
-        <InlineButton disabled={input.stopDisabled} onClick={() => void input.onStop()}>
-          {input.stopping ? "Stopping..." : "Stop"}
-        </InlineButton>
+        {input.runIsLive ? null : (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <InlineButton disabled={input.stopDisabled} onClick={() => void input.onStop()} />
+              }
+            >
+              {stopLabel}
+            </TooltipTrigger>
+            <TooltipPopup side="top">
+              Stops this thread and everything it is waiting on: subagents, delegated tasks, and
+              background commands. Queued messages wait until you send again.
+            </TooltipPopup>
+          </Tooltip>
+        )}
       </>
     ),
   };

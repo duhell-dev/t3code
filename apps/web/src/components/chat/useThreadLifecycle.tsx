@@ -605,8 +605,8 @@ export function useThreadLifecycle(input: ThreadLifecycleInput) {
         threadId: activeThread.id,
         tasks: activeBackgroundTasks,
         turnItems,
-        // Interrupt stops the active run first, not this work; the composer owns that Stop.
-        stopDisabled: runIsLive || !canOperateThread || isStoppingBackgroundWork,
+        runIsLive,
+        stopDisabled: !canOperateThread || isStoppingBackgroundWork,
         stopping: isStoppingBackgroundWork,
         onStop: handleStopBackgroundWorkStable,
         onOpenThread: onOpenRelatedThreadStable,
