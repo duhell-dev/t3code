@@ -417,6 +417,7 @@ function SidebarUpdateControl() {
       open={isConfirmingEverything}
       onOpenChange={setIsConfirmingEverything}
       version={everything.version}
+      fromVersion={everything.fromVersion}
       providerCount={everything.providerCount}
       rows={everything.rows}
       restarts={everything.restarts}

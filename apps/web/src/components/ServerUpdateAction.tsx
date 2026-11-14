@@ -30,6 +30,8 @@ import { useAtomCommand } from "~/state/use-atom-command";
 import { useServerConfigs } from "~/state/entities";
 import { useManagedPolicy } from "~/state/managedPolicy";
 import { environmentPresentations } from "~/state/presentation";
+import { useReleaseHighlights } from "~/state/releaseHighlights";
+import { ReleaseHighlightsList } from "./ReleaseHighlightsList";
 import { ManagedControl } from "./ManagedPolicy";
 import { manualServerUpdateCommand, serverRunsTargetOrNewer } from "~/versionSkew";
 import { crossesReleaseTrack } from "@t3tools/shared/cliRelease";
@@ -292,6 +294,11 @@ export function ServerUpdateAction({
   const sessionStateAtom = environmentSession.sessionStateAtom(environmentId);
   const canUpdate = useAtomValue(sessionStateAtom, canUpdateServer);
   const updatesDenial = managedUpdatesDenial(useManagedPolicy(environmentId));
+  const highlights = useReleaseHighlights(
+    serverVersion,
+    targetVersion,
+    channel === undefined && serverVersion !== undefined,
+  );
   const update = useServerUpdate();
   const updatesInstall =
     installation?.kind === "npm-global" || installation?.kind === "t3-launcher";
@@ -385,6 +392,14 @@ export function ServerUpdateAction({
       ? () => copyToClipboard(manualCommand, { command: manualCommand })
       : () => void handleUpdate();
 
+  const whatsNew =
+    highlights !== null && highlights.length > 0 ? (
+      <div className="max-w-80 py-1">
+        <div className="mb-1.5 font-medium text-xs">What's new in {targetVersion}</div>
+        <ReleaseHighlightsList highlights={highlights} limit={5} />
+      </div>
+    ) : null;
+
   if (appearance === "icon") {
     return (
       <Tooltip>
@@ -402,12 +417,15 @@ export function ServerUpdateAction({
         >
           <CircleArrowUpIcon className="size-3.5" />
         </TooltipTrigger>
-        <TooltipPopup side="top">{actionLabel}</TooltipPopup>
+        <TooltipPopup side="top">
+          {actionLabel}
+          {whatsNew}
+        </TooltipPopup>
       </Tooltip>
     );
   }
 
-  return (
+  const button = (
     <Button
       size={size}
       variant={variant}
@@ -417,6 +435,13 @@ export function ServerUpdateAction({
     >
       {actionLabel}
     </Button>
+  );
+  if (whatsNew === null) return button;
+  return (
+    <Tooltip>
+      <TooltipTrigger render={button} />
+      <TooltipPopup side="top">{whatsNew}</TooltipPopup>
+    </Tooltip>
   );
 }
 

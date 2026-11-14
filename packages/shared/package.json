@@ -439,6 +439,10 @@
       "types": "./src/cliRelease.ts",
       "import": "./src/cliRelease.ts"
     },
+    "./releaseHighlights": {
+      "types": "./src/releaseHighlights.ts",
+      "import": "./src/releaseHighlights.ts"
+    },
     "./gitPatchPath": {
       "types": "./src/gitPatchPath.ts",
       "import": "./src/gitPatchPath.ts"

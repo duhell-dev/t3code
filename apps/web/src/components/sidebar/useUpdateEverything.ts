@@ -1,5 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
+import { compareSemverVersions } from "@t3tools/shared/semver";
 
 import { APP_VERSION } from "~/branding";
 import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
@@ -72,6 +73,16 @@ export function useUpdateEverything(
   // Track-only hosts save a setting and restart nothing, so they are neither listed nor counted.
   const moving = servers.filter((server) => server.trackOnly !== true);
   const restarts = collectRestartingMachines(machines, moving, localUpdateVersion !== null);
+  // The oldest build this run moves; its release highlights up to the target are what is new.
+  const fromVersion =
+    [
+      ...(localUpdateVersion === null ? [] : [APP_VERSION]),
+      ...moving.flatMap(
+        (server) =>
+          machines.find((machine) => machine.environmentId === server.environmentId)?.serverConfig
+            ?.environment.serverVersion ?? [],
+      ),
+    ].toSorted(compareSemverVersions)[0] ?? null;
   const providerUpdates = useProviderUpdates();
   // A track switch moves app and servers only; provider updates stay a separate choice.
   const providers = channelSwitch ? { machines: [], updateAll: async () => [] } : providerUpdates;
@@ -94,6 +105,7 @@ export function useUpdateEverything(
   return {
     hasUpdates: servers.length > 0 || providers.machines.length > 0,
     ...view,
+    fromVersion,
     restarts,
     run: async ({
       downloadLocal,

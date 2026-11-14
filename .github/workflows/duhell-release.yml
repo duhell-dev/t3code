@@ -329,9 +329,57 @@ jobs:
             echo "Tag $tag auf $SHA angelegt."
           fi
 
+  # Highlights der seit dem vorigen Fork-Release hineingemergten Original-Nightlies
+  # plus eigene `Highlight:`-Trailer, im Format, das die Clients lesen
+  # (scripts/duhell-release-notes.ts). Nur Lesen; scheitert der Job, erscheint
+  # das Release mit der kurzen Beschreibung wie bisher.
+  notes:
+    name: Release-Notizen schreiben
+    needs: meta
+    runs-on: [self-hosted, linux, x64, t3code-runner]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.meta.outputs.sha }}
+          fetch-depth: 0
+          filter: blob:none
+          sparse-checkout: |
+            scripts/duhell-release-notes.ts
+            packages/shared/package.json
+            packages/shared/src/releaseHighlights.ts
+            packages/shared/src/semver.ts
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Notizen erzeugen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Ohne Installation: @t3tools/shared zeigt auf den Quellordner; die zwei
+        # Dateien brauchen keine weiteren Pakete.
+        run: |
+          mkdir -p scripts/node_modules/@t3tools
+          ln -sfn ../../../packages/shared scripts/node_modules/@t3tools/shared
+          node scripts/duhell-release-notes.ts \
+            --version "${{ needs.meta.outputs.version }}" \
+            --commit "${{ needs.meta.outputs.sha }}" \
+            --repository "$GITHUB_REPOSITORY" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --output release-notes.md
+          cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: error
+          retention-days: 1
+
   publish:
     name: Release veröffentlichen
-    needs: [meta, cli, desktop_win, tag]
+    needs: [meta, cli, desktop_win, tag, notes]
     # Der Desktop-Bau darf scheitern; die CLI-Archive erscheinen trotzdem.
     if: ${{ !cancelled() && needs.cli.result == 'success' && needs.tag.result == 'success' }}
     runs-on: [self-hosted, linux, x64, t3code-runner]
@@ -350,6 +398,13 @@ jobs:
           pattern: cli-*
           merge-multiple: true
           path: release-assets
+
+      - name: Release-Notizen holen
+        if: needs.notes.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+          path: release-notes
 
       - name: Windows-Installer holen
         if: needs.desktop_win.result == 'success'
@@ -400,8 +455,10 @@ jobs:
             notes="Fork-Bau von duhell-dev/t3code, Zweig duhell, Commit $SHA.
           CLI-Archive (Linux x64, Windows x64) für den Updater und, wenn gebaut, der Windows-Installer mit nightly.yml. Unsigniert.
           Lauf: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            notes_args=(--notes "$notes")
+            [[ -s release-notes/release-notes.md ]] && notes_args=(--notes-file release-notes/release-notes.md)
             gh release create "$tag" "${files[@]}" -R "$GITHUB_REPOSITORY" \
               --verify-tag --prerelease --latest=false \
-              --title "T3 Code duHell Nightly $VERSION (${SHA:0:12})" --notes "$notes"
+              --title "T3 Code duHell Nightly $VERSION (${SHA:0:12})" "${notes_args[@]}"
           fi
           echo "Release: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" >> "$GITHUB_STEP_SUMMARY"

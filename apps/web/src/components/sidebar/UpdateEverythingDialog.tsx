@@ -4,7 +4,9 @@ import { Atom } from "effect/reactivity";
 import { ChevronRightIcon } from "lucide-react";
 import { Fragment, type RefObject, useRef } from "react";
 
+import { useReleaseHighlights } from "~/state/releaseHighlights";
 import { environmentThreadShells } from "~/state/threads";
+import { ReleaseHighlightsList } from "../ReleaseHighlightsList";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -43,6 +45,8 @@ interface UpdateEverythingDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly version: string | null;
+  /** The oldest build the update moves; release highlights after it up to `version` show. */
+  readonly fromVersion?: string | null;
   readonly providerCount: number;
   readonly rows: ReadonlyArray<UpdateEverythingRow>;
   readonly restarts: ReadonlyArray<RestartingMachine>;
@@ -94,6 +98,7 @@ const APP_LABELS = {
 
 function UpdateEverythingDialogContent({
   version,
+  fromVersion,
   providerCount,
   rows,
   restarts,
@@ -127,6 +132,7 @@ function UpdateEverythingDialogContent({
   const restarting = new Set(restarts.map((machine) => machine.environmentId));
   const updating = rows.filter((row) => row.app !== null || row.providers.length > 0);
   const skipped = rows.filter((row) => row.skipped !== null);
+  const highlights = useReleaseHighlights(fromVersion, version, fromVersion !== undefined);
 
   return (
     <>
@@ -156,6 +162,12 @@ function UpdateEverythingDialogContent({
               {note}
             </p>
           ))}
+          {highlights !== null && highlights.length > 0 ? (
+            <section aria-label="What's new">
+              <h3 className="mb-1.5 font-medium text-sm">What's new</h3>
+              <ReleaseHighlightsList highlights={highlights} />
+            </section>
+          ) : null}
           {/* Machine names truncate first. Provider lists wrap between names, never inside one. */}
           <div className="grid grid-cols-[minmax(4rem,max-content)_max-content_minmax(min-content,1fr)_max-content] gap-x-4 text-sm">
             <div className="col-span-full grid grid-cols-subgrid border-b pb-1.5 text-muted-foreground text-xs">
