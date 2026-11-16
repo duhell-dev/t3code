@@ -88,10 +88,12 @@ export function serverRunsTargetOrNewer(
   );
 }
 
+/** `targetVersion` is the build an update moves to; this client's own unless a newer release is known. */
 export function resolveServerConfigVersionMismatch(
   serverConfig: Pick<ServerConfig, "environment"> | null | undefined,
+  targetVersion: string = APP_VERSION,
 ): VersionMismatch | null {
-  return resolveVersionMismatch(serverConfig?.environment.serverVersion);
+  return resolveVersionMismatch(serverConfig?.environment.serverVersion, targetVersion);
 }
 
 export function resolveServerSelfUpdateCapability(

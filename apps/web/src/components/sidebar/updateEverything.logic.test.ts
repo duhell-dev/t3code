@@ -8,9 +8,11 @@ import {
   collectServerUpdateTargets,
   describeUpdateCapsule,
   describeUpdateEverything,
+  newerServedBuild,
   runUpdateEverything,
   type UpdateEverythingMachine,
 } from "./updateEverything.logic";
+import { releaseUpdateTarget } from "~/state/forkReleases.logic";
 
 function machine(
   id: string,
@@ -471,5 +473,62 @@ describe("describeUpdateCapsule", () => {
     expect(describeUpdateCapsule({ ...run, trackSwitch: true }, [failed], null, 0).action).toBe(
       "dismiss",
     );
+  });
+});
+
+// duhell: a browser targets the newest fork release it read, not only its own build.
+describe("collectServerUpdateTargets with the browser's release target", () => {
+  const page = "0.1.10-nightly.20261112.1000021";
+  const fleet = [
+    machine("serving", page, "boot-service"),
+    machine("behind", "0.1.10-nightly.20261112.1000020", "boot-service"),
+    machine("stable", "0.1.9", "boot-service"),
+  ];
+  const targetsFor = (releases: Parameters<typeof releaseUpdateTarget>[1]) =>
+    collectServerUpdateTargets(fleet, releaseUpdateTarget(page, releases)).targets.map((target) => [
+      target.serverLabel,
+      target.targetVersion,
+    ]);
+
+  it("offers a newer release to every server on the page's channel, the serving one too", () => {
+    expect(
+      targetsFor([
+        { tag_name: "v0.1.10-nightly.20261116.1000025" },
+        { tag_name: "v0.1.10-nightly.20261112.1000021" },
+      ]),
+    ).toEqual([
+      ["serving", "0.1.10-nightly.20261116.1000025"],
+      ["behind", "0.1.10-nightly.20261116.1000025"],
+    ]);
+  });
+
+  it("offers only the page's build when that is the newest release", () => {
+    expect(targetsFor([{ tag_name: `v${page}` }])).toEqual([["behind", page]]);
+  });
+
+  it("ignores a newer release on another channel", () => {
+    expect(targetsFor([{ tag_name: "v0.2.0" }, { tag_name: `v${page}` }])).toEqual([
+      ["behind", page],
+    ]);
+  });
+
+  it("falls back to the page's build when the releases could not be read", () => {
+    expect(targetsFor(null)).toEqual([["behind", page]]);
+  });
+});
+
+describe("newerServedBuild", () => {
+  it("names the server's build when it is newer than the page", () => {
+    expect(
+      newerServedBuild("0.1.10-nightly.20261112.1000021", "0.1.10-nightly.20261116.1000025"),
+    ).toBe("0.1.10-nightly.20261116.1000025");
+  });
+
+  it("stays put when the page is on the server's build or newer, or the version is unknown", () => {
+    const page = "0.1.10-nightly.20261116.1000025";
+    expect(newerServedBuild(page, page)).toBeNull();
+    expect(newerServedBuild(page, "0.1.10-nightly.20261112.1000021")).toBeNull();
+    expect(newerServedBuild(page, null)).toBeNull();
+    expect(newerServedBuild(page, " ")).toBeNull();
   });
 });

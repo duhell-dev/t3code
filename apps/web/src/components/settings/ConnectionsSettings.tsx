@@ -101,6 +101,7 @@ import {
 } from "~/state/desktopNetworkAccess";
 import { desktopWslStateAtom, refreshDesktopWslState } from "~/state/desktopWslState";
 import { useDesktopUpdateState } from "~/state/desktopUpdate";
+import { useReleaseUpdateTarget } from "~/state/forkReleases";
 import {
   type EnvironmentPresentation,
   useEnvironment,
@@ -277,6 +278,8 @@ function ConnectionsSettingsContent({
   const listedEnvironments = savedEnvironments.filter(
     (environment) => !isDesktopLocalConnectionTarget(environment.entry.target),
   );
+  // duhell: also a newer fork release this browser read (forkReleases.ts).
+  const updateTargetVersion = useReleaseUpdateTarget();
   const savedUpdateStates = useAtomValue(
     environmentUpdateStatesAtom(
       environmentIdsKey(savedEnvironments.map(({ environmentId }) => environmentId)),
@@ -288,7 +291,10 @@ function ConnectionsSettingsContent({
   }));
   const savedServerUpdateTargets = savedServerUpdateStates.flatMap(
     ({ environment, updateStatus }): ServerUpdateTarget[] => {
-      const mismatch = resolveServerConfigVersionMismatch(environment.serverConfig);
+      const mismatch = resolveServerConfigVersionMismatch(
+        environment.serverConfig,
+        updateTargetVersion,
+      );
       const selfUpdate = resolveServerSelfUpdateCapability(environment.serverConfig);
       const desktopAppUpdate = supportsDesktopAppUpdate(environment.serverConfig);
       if (
@@ -378,7 +384,10 @@ function ConnectionsSettingsContent({
     primaryServerConfig?.managedPolicy,
     "remoteClients",
   );
-  const primaryVersionMismatch = resolveServerConfigVersionMismatch(primaryServerConfig);
+  const primaryVersionMismatch = resolveServerConfigVersionMismatch(
+    primaryServerConfig,
+    updateTargetVersion,
+  );
   const primaryServerUpdateState = useAtomValue(
     serverEnvironment.updateStateAtom(primaryEnvironmentId),
   );

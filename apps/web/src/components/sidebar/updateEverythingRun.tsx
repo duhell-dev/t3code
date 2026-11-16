@@ -11,8 +11,9 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 
-import { APP_VERSION } from "~/branding";
+import { APP_VERSION, HOSTED_APP_CHANNEL } from "~/branding";
 import { environmentCatalog } from "~/connection/catalog";
+import { isElectron } from "~/env";
 import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { desktopUpdateStateAtom } from "~/state/desktopUpdate";
 import { serverEnvironment } from "~/state/server";
@@ -23,6 +24,7 @@ import {
   closeFinishedUpdateRun,
   getUpdateEverythingToastView,
   isServerUpdateHandedOff,
+  newerServedBuild,
   type UpdateEverythingResult,
   type UpdateEverythingRun,
   type UpdateRunMachine,
@@ -263,6 +265,11 @@ function takeSavedUpdateEverythingResult(): typeof SavedResult.Type | null {
 }
 
 export function showUpdateEverythingResult(result: UpdateEverythingResult): void {
+  // duhell: the page reloads into its server's new build next; the result shows after that.
+  if (servedBuildReloadPending()) {
+    saveUpdateEverythingResult(result);
+    return;
+  }
   const view = getUpdateEverythingToastView(result, APP_VERSION);
   if (!view) return;
   toastManager.add(
@@ -360,14 +367,19 @@ function followHandedOffServers(servers: ReadonlyArray<HandedOffServer>): void {
   }
 }
 
-/** Reports, once per launch, how the update run that restarted the app ended. */
-export function startDesktopUpdateLaunchNotice(): () => void {
+/** Reports, once per load, how the update run that restarted or reloaded the app ended. */
+export function showSavedUpdateEverythingResult(): void {
   const saved = takeSavedUpdateEverythingResult();
   if (saved) {
     const handedOff = saved.handedOff ?? [];
     showUpdateEverythingResult({ ...saved, restarting: handedOff.map((server) => server.label) });
     followHandedOffServers(handedOff);
   }
+}
+
+/** Reports, once per launch, how the update run that restarted the app ended. */
+export function startDesktopUpdateLaunchNotice(): () => void {
+  showSavedUpdateEverythingResult();
 
   let notifiedNotAppliedVersion: string | null = null;
   return appAtomRegistry.subscribe(
@@ -387,4 +399,75 @@ export function startDesktopUpdateLaunchNotice(): () => void {
     },
     { immediate: true },
   );
+}
+
+// duhell: a browser page is the build of the server that served it. Once that server runs a newer
+// build (updated from here, from another client, or by hand), the page reloads into it, after any
+// update run here has finished. Once per build, so a server still handing out the old page cannot
+// loop it (DUHELL.md, "Update check in the browser").
+const SERVED_BUILD_RELOAD_KEY = "t3code:served-build-reload:v1";
+const SERVED_BUILD_RELOAD_DELAY_MS = 1_000;
+
+function servesThisPage(httpBaseUrl: string): boolean {
+  try {
+    return new URL(httpBaseUrl).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+const newerServedBuildAtom = Atom.make((get): string | null => {
+  if (isElectron || HOSTED_APP_CHANNEL !== null || import.meta.env.DEV) return null;
+  for (const [environmentId, entry] of get(environmentCatalog.catalogValueAtom).entries) {
+    if (entry.target._tag !== "PrimaryConnectionTarget") continue;
+    if (!servesThisPage(entry.target.httpBaseUrl)) return null;
+    return newerServedBuild(
+      APP_VERSION,
+      get(serverEnvironment.configValueAtom(environmentId))?.environment.serverVersion,
+    );
+  }
+  return null;
+}).pipe(Atom.withLabel("served-build-newer"));
+
+function servedBuildReloaded(build: string): boolean {
+  try {
+    return window.sessionStorage.getItem(SERVED_BUILD_RELOAD_KEY) === build;
+  } catch {
+    // Without storage nothing stops a reload loop, so never reload.
+    return true;
+  }
+}
+
+function servedBuildReloadPending(): boolean {
+  const build = appAtomRegistry.get(newerServedBuildAtom);
+  return build !== null && !servedBuildReloaded(build);
+}
+
+export function startServedBuildReload(): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const check = () => {
+    clearTimeout(timer);
+    if (!servedBuildReloadPending() || appAtomRegistry.get(updateEverythingRunAtom) !== null) {
+      return;
+    }
+    // Lets a run that just closed save its result for the reloaded page first.
+    timer = setTimeout(() => {
+      const build = appAtomRegistry.get(newerServedBuildAtom);
+      if (build === null || servedBuildReloaded(build)) return;
+      if (appAtomRegistry.get(updateEverythingRunAtom) !== null) return;
+      try {
+        window.sessionStorage.setItem(SERVED_BUILD_RELOAD_KEY, build);
+      } catch {
+        return;
+      }
+      window.location.reload();
+    }, SERVED_BUILD_RELOAD_DELAY_MS);
+  };
+  const stopBuild = appAtomRegistry.subscribe(newerServedBuildAtom, check, { immediate: true });
+  const stopRun = appAtomRegistry.subscribe(updateEverythingRunAtom, check);
+  return () => {
+    clearTimeout(timer);
+    stopBuild();
+    stopRun();
+  };
 }

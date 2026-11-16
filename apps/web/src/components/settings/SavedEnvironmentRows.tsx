@@ -57,7 +57,7 @@ import { TunnelLimitAlert, TunnelUsageMeter } from "../cloud/TunnelUsage";
 import { environmentCatalog } from "~/connection/catalog";
 import { readEnvironmentScope } from "~/state/session";
 import { type EnvironmentPresentation, useRelayEnvironmentDiscovery } from "~/state/environments";
-import { APP_VERSION } from "~/branding";
+import { useReleaseUpdateTarget } from "~/state/forkReleases";
 import { useManagedPolicy } from "~/state/managedPolicy";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useUpdateEnvironmentSettings } from "~/hooks/useSettings";
@@ -163,7 +163,12 @@ export function SavedBackendListRow({
       );
     },
   });
-  const versionMismatch = resolveServerConfigVersionMismatch(environment.serverConfig);
+  // duhell: also a newer fork release this browser read (forkReleases.ts).
+  const updateTargetVersion = useReleaseUpdateTarget();
+  const versionMismatch = resolveServerConfigVersionMismatch(
+    environment.serverConfig,
+    updateTargetVersion,
+  );
   const serverUpdateState = useAtomValue(serverEnvironment.updateStateAtom(environmentId));
   const resumingServerUpdate =
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
@@ -360,7 +365,7 @@ export function SavedBackendListRow({
           environmentId={environmentId}
           serverLabel={`${environment.label} server`}
           fromVersion={lastDescriptor?.serverVersion}
-          targetVersion={APP_VERSION}
+          targetVersion={updateTargetVersion}
           label={serverUpdateState.status === "failed" ? "Retry update" : "Update"}
         />
       ) : null}

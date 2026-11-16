@@ -689,3 +689,17 @@ export function describeUpdateEverything(plan: UpdateEverythingPlan): {
     rows: Array.from(rows.values()),
   };
 }
+
+/**
+ * duhell: the build a page should reload into, when the server that served it now runs a newer
+ * one. Null when the page is on that build or newer, or the server's version is unknown.
+ */
+export function newerServedBuild(
+  pageVersion: string,
+  serverVersion: string | null | undefined,
+): string | null {
+  const served = serverVersion?.trim();
+  if (!served) return null;
+  // The page plays the server here: it is the one behind.
+  return resolveVersionMismatch(pageVersion, served) === null ? null : served;
+}

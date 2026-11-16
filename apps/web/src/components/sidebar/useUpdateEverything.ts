@@ -7,6 +7,7 @@ import { isDesktopLocalConnectionTarget } from "~/connection/desktopLocal";
 import { isElectron } from "~/env";
 import { useEnvironments } from "~/state/environments";
 import { environmentIdsKey } from "~/state/environmentAtomList";
+import { useReleaseUpdateTarget } from "~/state/forkReleases";
 import { environmentUpdateStatesAtom, serverEnvironment } from "~/state/server";
 import { environmentSessionStatesAtom } from "~/state/session";
 import { useAtomCommand } from "~/state/use-atom-command";
@@ -54,7 +55,8 @@ export function useUpdateEverything(
   localUpdateVersion: string | null,
   channelSwitch?: ChannelSwitchRelease,
 ) {
-  const targetVersion = localUpdateVersion ?? APP_VERSION;
+  // duhell: a browser has no download of its own, so a newer fork release it read is the target too.
+  const targetVersion = useReleaseUpdateTarget(localUpdateVersion ?? APP_VERSION);
   const { environments } = useEnvironments();
   const environmentIds = environmentIdsKey(environments.map(({ environmentId }) => environmentId));
   const sessionStates = useAtomValue(environmentSessionStatesAtom(environmentIds));

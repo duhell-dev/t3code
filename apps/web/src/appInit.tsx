@@ -23,7 +23,11 @@ import { startLegacyThreadMigrationToast } from "./components/LegacyThreadMigrat
 import { startPermissionUpdateNotices } from "./components/PermissionUpdateNotice";
 import { startAgentOpenedPreviews } from "./components/preview/agentOpenedPreviews";
 import { startMainAppLocationTracking } from "./components/sidebar/mainAppLocation";
-import { startDesktopUpdateLaunchNotice } from "./components/sidebar/updateEverythingRun";
+import {
+  showSavedUpdateEverythingResult,
+  startDesktopUpdateLaunchNotice,
+  startServedBuildReload,
+} from "./components/sidebar/updateEverythingRun";
 import { startSlowRpcRequestToasts } from "./components/SlowRpcRequestToastCoordinator";
 import { startThreadNotifications } from "./components/ThreadNotificationCoordinator";
 import { startGuideRunNotifications } from "./components/pullRequest/guide/PullRequestGuideRunCoordinator";
@@ -38,6 +42,7 @@ import {
 import { startDefaultThemeAdoption } from "./hooks/useDefaultTheme";
 import { startEnvironmentThemeRepaint } from "./hooks/useEnvironmentTheme";
 import { readLocalStorageValue, subscribeLocalStorageKey } from "./hooks/useLocalStorage";
+import { startForkReleaseRefresh } from "./state/forkReleases";
 import { startHostEnvironmentLookup } from "./state/primaryEnvironment";
 import {
   getClientSettings,
@@ -302,6 +307,12 @@ export function startAppServices(): AppRouter {
   startThreadNotifications(appAtomRegistry, router);
   startGuideRunNotifications(appAtomRegistry, router);
   if (isElectron) startDesktopUpdateLaunchNotice();
+  else {
+    // duhell: a browser learns of fork releases itself and follows its server to a new build.
+    showSavedUpdateEverythingResult();
+    startServedBuildReload();
+    startForkReleaseRefresh();
+  }
 
   return router;
 }

@@ -41,4 +41,15 @@ A fork commit adds its own highlight with a trailer, one sentence after a short 
 Only commits made directly on `duhell` count, not merges from `main`. Clients show these
 highlights before a server update and once after the app moves to a new version.
 
+## Update check in the browser
+
+A browser has no desktop updater, and upstream offers a server update only when the open client
+is newer than the server. So the web client reads this fork's release list itself
+(`apps/web/src/state/forkReleases.ts`, without a token, once per load, then hourly while visible
+and on focus after 15 minutes). The newest release on the client's channel becomes the update
+target when it is newer than the client: the update button, Settings → Connections and the server
+that served the page all offer it. A failed read leaves the target at the client's build. Once
+the server that served the page runs a newer build, the page reloads into it after any update run
+there has finished, once per build. The desktop app keeps using its own updater.
+
 Operating notes are kept outside this repository.
