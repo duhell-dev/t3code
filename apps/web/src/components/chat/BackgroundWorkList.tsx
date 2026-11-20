@@ -1,3 +1,4 @@
+import { T, useGT } from "gt-react";
 import type {
   EnvironmentId,
   OrchestrationV2PendingBackgroundTask,
@@ -35,10 +36,11 @@ export function BackgroundWorkList(props: {
   readonly turnItems: ThreadStructure["turnItems"];
   readonly onOpenThread: (threadId: ThreadId, environmentId?: EnvironmentId) => void;
 }) {
+  const gt = useGT();
   const streamsOutput = useCommandOutputStreaming(props.environmentId);
   return (
     <ul
-      aria-label="Background work"
+      aria-label={gt("Background work")}
       className="ms-1.5 max-h-[min(24rem,50dvh)] list-none space-y-2 overflow-y-auto overscroll-contain border-s border-border ps-3 text-xs text-muted-foreground"
     >
       {props.rows.map((row) => (
@@ -100,7 +102,7 @@ function BackgroundWorkListRow(props: {
         )}
         {open === null ? null : (
           <InlineButton tone="muted" onClick={open}>
-            Open
+            <T context="verb, opens a background task's thread">Open</T>
           </InlineButton>
         )}
       </div>

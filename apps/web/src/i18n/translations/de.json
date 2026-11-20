@@ -155,10 +155,9 @@
   "0cb7a36802fe8089": "Filter {number} braucht einen Pfad unter body, headers oder query.",
   "1fa38fb049c6b56e": "Filter {number} braucht einen Pfad unter body, headers oder query und mindestens einen Wert.",
   "31ec02bdcb3920d1": "Filter {number} braucht einen Pfad unter body, headers oder query und einen Wert.",
+  "62ae4688ece05590": "Sicher gespeichert, dem Agenten nie angezeigt",
   "81f613bb68d85bb7": "Nicht im Chat, sondern in einer privaten Datei, die die Befehle dieses Agenten 24 Stunden lang lesen können",
   "07b56c0c12bd2de1": "Nicht im Chat, sondern in privaten Dateien, die die Befehle dieses Agenten 24 Stunden lang lesen können",
-  "6435447ce7656f13": "{label} anzeigen",
-  "62ae4688ece05590": "Sicher gespeichert, dem Agenten nie angezeigt",
   "8c2d901183b4e219": "Geheimnis einfügen",
   "610aea624f895a78": "Sicher gespeichert und privat gehalten",
   "329b7854b7e0546e": "Verwende eine 1Password-Referenz wie {example}.",
@@ -892,6 +891,11 @@
   "2605da0149cd15f1": "Kontext wird komprimiert",
   "39a82db18ca50c21": "Kontext komprimiert: {before} → {after} Tokens",
   "885ae08a2160a158": "Kontext komprimiert",
+  "4d4981a1c5bd9728": "Befehl läuft",
+  "a078225c5f197cd2": "Befehl fehlgeschlagen",
+  "37ab148aaa486051": "Befehl abgelehnt",
+  "0112efa1861c7a30": "Befehl gestoppt",
+  "930808342aac8010": "Befehl ausgeführt",
   "3ab6b281a0991766": "{count, plural, =1 {Verknüpfte Pull Requests geprüft} other {Verknüpfte Pull Requests {count}-mal geprüft}}",
   "857e92a89b6b6257": "{count, plural, one {{count} Datei gelesen} other {{count} Dateien gelesen}}",
   "466ac7fcdb97bb76": "{count, plural, one {{count} Datei geändert} other {{count} Dateien geändert}}",
@@ -1381,13 +1385,13 @@
   "17783248201b6e43": "Anbieter wird erneut versucht ({progress})",
   "3ec9f7301a7e06dc": "{attempt, plural, one {Anbieter wiederhergestellt ({progress} Versuche)} other {Anbieter wiederhergestellt ({progress} Versuche)}}",
   "2d707aa220f213ec": "{attempt, plural, one {Nutzungslimit nach {progress} Versuchen erreicht} other {Nutzungslimit nach {progress} Versuchen erreicht}}",
+  "73459bd2b5bdfe05": "{summary} after {progress} retries",
   "7988500254403038": "{attempt, plural, one {Anbieterfehler nach {progress} Versuchen} other {Anbieterfehler nach {progress} Versuchen}}",
   "ed8b45cc0303e955": "Wiederholung beim Anbieter gestoppt ({progress})",
   "1578f868b0020f5f": "Neuer Versuch in {delay} ms.",
   "4c9a0b64f128da3a": "Neuer Versuch in {delay} s.",
   "5de030e595796117": "Thread erstellt",
   "c392becd445ecdba": "Denkt nach",
-  "930808342aac8010": "Befehl ausgeführt",
   "c01f9d3f3624c903": "Befehl",
   "fc933cf9b3edd743": "{fileName} geändert",
   "9bdd23eb0206783f": "Dateiänderung",
@@ -1706,6 +1710,10 @@
   "2e995206e087c3fc": "Versuche zu antworten, sobald die Verbindung oder ausstehende Eingabe geklärt ist.",
   "604ec3067171a0d7": "Unterhaltung",
   "d6182a057ea12624": "Übergeordneter Thread",
+  "1edfb31fecfa5862": "Delegated from {environment}",
+  "23870d8ce4a4d70c": "An agent in “{thread}” on {environment} started this thread.",
+  "7f0abaf1ea336b0b": "From {environment}",
+  "bb961a3c36fe3ef1": "Started by an agent on {environment} through a linked environment.",
   "30fa4a764d11ae42": "{name} konnte nicht heruntergeladen werden",
   "4952f87dc98191a7": "Der Anhang ist nicht verfügbar.",
   "2fd6d178493fb407": "Die aktuelle Runde konnte nicht unterbrochen werden.",
@@ -2336,6 +2344,7 @@
   ],
   "aece11422a97a057": "Halte {shortcut} gedrückt oder drücke zweimal zum Beenden",
   "404941d325a2755b": "Drücke {shortcut} erneut zum Beenden",
+  "ec82041b98853760": "{count, plural, one {and {count} more highlight} other {and {count} more highlights}}",
   "48ef9d3971c97e7d": "Ansicht konnte nicht wieder geöffnet werden",
   "158a785cabe10dda": "Arbeitsbereichspanel",
   "9371d8cc390a8a1b": "Browservorschauen sind nur in der T3-Code-Desktop-App verfügbar.",
@@ -2430,6 +2439,22 @@
   "097b5f9ddc46e66c": "{action} für {serverLabel}",
   "f8725d62bc72896d": "Wechsle den Kanal unter Info → Update-Kanal",
   "048a22fa4de22f96": "Aktualisiere die Desktop-App auf diesem Rechner, um diesen Server zu aktualisieren.",
+  "abb7545be0190d7a": [
+    "Server already runs ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "c94e9794354fd047": [
+    "What's new in ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
   "e7a50ab49cdfd076": "Wird neu erzeugt… ({count})",
   "6523a0ca24b57fde": "Titel neu erzeugen ({count})",
   "96adc8bf3106015d": "Loslösen ({count})",
@@ -3124,7 +3149,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "auf dem Computer, der diese Seite geöffnet hat"]
+      "c": [
+        " ",
+        "auf dem Computer, der diese Seite geöffnet hat"
+      ]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3136,7 +3164,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "· wer es ausführt, erhält diesen Zugriff"]
+      "c": [
+        " ",
+        "· wer es ausführt, erhält diesen Zugriff"
+      ]
     }
   ],
   "c54cc9c75db9dc58": "Genehmige nur eine Anmeldung, die du gerade selbst gestartet hast.",
@@ -3224,16 +3255,8 @@
   "3390f0b2396998c0": "Auswahl im Eingabefeld zitieren",
   "e5dc8d61a6d178ed": "Auswahl kürzen",
   "a5b06aaaba1d742f": "Zitieren",
-  "b1d8a5a24bd684e3": "Subagent",
-  "5a805b37d8940816": "Befehl",
-  "da2da87e78bd6b11": "Monitor",
-  "b034f8434dd8479d": "Hintergrundaufgabe",
-  "519dd506361059c9": "Befehl",
-  "b851b1f4c772dea4": "Wartet",
-  "83915f0968cde2cc": "Läuft",
-  "b90e87f4b7125237": "Details",
-  "16dc67f5429d8bae": "Hintergrundarbeit",
-  "2188eee8f81b0f51": "Subagent öffnen",
+  "668e353261860b41": "Background work",
+  "613a5378d40c04c3": "Open",
   "3b03fc47eba632b4": "{count, plural, one {{formattedCount} geänderte Datei} other {{formattedCount} geänderte Dateien}}",
   "ec9e0be8ec693302": "Alle Ordner einklappen",
   "b791dd86f7991cc0": "Alle Ordner ausklappen",
@@ -3306,15 +3329,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "1c983a010570cdbb": [
-    "Von einem Agenten auf ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " über eine verknüpfte Umgebung gestartet."
   ],
   "601807baf4e25b94": "Vorschau von {name}",
   "922a18febd2c86d7": "Bildvorschau",
@@ -3731,10 +3745,6 @@
   "ac511f991a3c1fab": "Websuche",
   "07e65dba2b16d3f7": "{count, plural, one {{path} +{count} weitere} other {{path} +{count} weitere}}",
   "6ab96e26bda35288": "Denkt nach",
-  "4d4981a1c5bd9728": "Befehl läuft",
-  "a078225c5f197cd2": "Befehl fehlgeschlagen",
-  "37ab148aaa486051": "Befehl abgelehnt",
-  "0112efa1861c7a30": "Befehl gestoppt",
   "dc8ddcad32e2a50c": "{program} läuft",
   "f0db8caadd8f120e": "{program} fehlgeschlagen",
   "9a4cc1d1df413b99": "{program} abgelehnt",
@@ -3972,6 +3982,7 @@
   "90062342f04966ff": "Aktualisiere den T3-Code-Server dieser Umgebung, um Pull Requests zu durchsuchen.",
   "5e7157db126f1641": "Issues nicht verfügbar",
   "42ade0e14ff6af94": "Aktualisiere den T3-Code-Server dieser Umgebung, um Issues zu durchsuchen.",
+  "6435447ce7656f13": "{label} anzeigen",
   "993dcd04611f9571": "Sicher speichern",
   "ccbe48efc8e30c52": "Nebenchat „{title}“ löschen?",
   "3a859b690f41e899": "Dadurch wird sein Gesprächsverlauf dauerhaft gelöscht.",
@@ -4023,6 +4034,8 @@
   "aae1e87a3919b642": "Möglicherweise ist der Speicher knapp. „Stopp erzwingen“ beendet seine Prozesse.",
   "e9d48e7c2bae2f68": "Stopp wird erzwungen...",
   "b9a547b1936fb658": "Stopp erzwingen",
+  "58ac05b9fbce58ce": "Wird gestoppt...",
+  "ebc642a4042f2fb0": "Stop all",
   "7100c70090280026": [
     "Wartet · ",
     {
@@ -4039,8 +4052,7 @@
       "v": "v"
     }
   ],
-  "58ac05b9fbce58ce": "Wird gestoppt...",
-  "4bf9327818b58241": "Stoppen",
+  "50515ce600db4a7e": "Stops this thread and everything it is waiting on: subagents, delegated tasks, and background commands. Queued messages wait until you send again.",
   "8fe132a05b04a8dc": [
     "Dieser Thread lief zuletzt auf ",
     {
@@ -4431,6 +4443,7 @@
     }
   ],
   "a2aaca7ff8310186": "Chat öffnen",
+  "2188eee8f81b0f51": "Subagent öffnen",
   "a3048aaa541b7744": "Aktivität",
   "4a3cbccb2beedeb0": "Bild",
   "36fb7b9046d2e288": "Tool-Aufrufe",
@@ -4532,6 +4545,8 @@
   "717498f2abb43bfe": "Quellunterhaltung öffnen",
   "81cbd4ade23efc77": "Fork öffnen",
   "c026ded437a942ee": "auf {environment}",
+  "189cb97125af21c1": "Details ausblenden",
+  "63790659557f315e": "Details anzeigen",
   "29b99b6828ed8295": "Neue Sitzung",
   "42606de8b5a5e786": "Kontextübergabe ausstehend",
   "4d765811334b8edf": "Kontextübergabe",
@@ -4544,6 +4559,30 @@
     }
   ],
   "0832a03c4dc5eac4": "Thread erstellt",
+  "b61e4031558f0ac2": [
+    {
+      "t": "span",
+      "i": 1,
+      "c": "Provider error: "
+    },
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "6f1343e6e1c73712": [
+    {
+      "t": "span",
+      "i": 1,
+      "c": "Sent to the agent: "
+    },
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
   "50581b0c78ba5b66": "Mikrofon blockiert",
   "8aca0bbde1b8c032": "Entwurf nicht verfügbar",
   "036e6ffe9fa26742": "Nimmt bereits auf",
@@ -4618,6 +4657,7 @@
   "6769d95831ddd2d2": "Basis",
   "8a26eab2f53bfc4e": "Pfad",
   "dc60a55261658ce6": "Setup",
+  "b90e87f4b7125237": "Details",
   "23b8c1f7de1c0d65": "Terminal öffnen",
   "d493907255bf9f03": "Lokal arbeiten",
   "6120db6070524903": "{name}, zoombares Bild",
@@ -4703,6 +4743,7 @@
   "82d82cdbe3b0f975": "{size} · Mit {shortcut} bleibt großer eingefügter Text im Text.",
   "247cd77b35ddb586": "„{name}“ konnte nicht als Bild gelesen werden.",
   "7eccb44d5449e777": "„{name}“ ist zu groß zum Anhängen, selbst nach der Komprimierung.",
+  "d07dd6dfd269680a": "{names} konnte nicht wiederhergestellt werden: Das Eingabefeld hat sein Limit von {limit} Anhängen erreicht.",
   "1d4059658a0ab500": "{name} aus der Nachricht entfernen?\nEs wird in deinem Text referenziert; beim Entfernen werden auch alle Referenzen entfernt.",
   "86261d5bd0651358": "Dieses Bild aus der Nachricht entfernen?\nEs wird in deinem Text referenziert; beim Entfernen werden auch alle Referenzen entfernt.",
   "f70c49e9f30807a3": "Der eingefügte Text ist zu groß für diese Nachricht",
@@ -4775,7 +4816,6 @@
   "c809a3c353e67a28": "Der Browserspeicher hat die Aktualisierung abgelehnt, daher könnte dieser Eintrag nach dem Neuladen noch da sein.",
   "1a4bc01f0ca772c2": "{names} hat beim Speichern dieses Prompts das Größenlimit der Ablage überschritten.",
   "bb3b4ad32b596e11": "{names} konnte beim Speichern dieses Prompts nicht gelesen werden.",
-  "d07dd6dfd269680a": "{names} konnte nicht wiederhergestellt werden: Das Eingabefeld hat sein Limit von {limit} Anhängen erreicht.",
   "7e4a6a2c84d34a80": "{names}: Abgelegte Dateien werden 24 Stunden lang aufbewahrt, und dieser Upload ist abgelaufen. Hänge die Datei erneut an.",
   "1e3ede33afee71ba": "Einige Anhänge wurden nicht wiederhergestellt",
   "98c76143d9aae871": "Ablage-Eintrag kommt möglicherweise zurück",
@@ -6269,7 +6309,6 @@
   "fbaa47ab5f038cfc": "Die Vorschau ist nur in der T3-Code-Desktop-App verfügbar.",
   "2f12af145a5b64f4": "Kopple diesen Client erneut mit Vorschauzugriff, um Browservorschauen zu steuern.",
   "ab063600168940a1": "{url} aus dem Verlauf entfernen",
-  "189cb97125af21c1": "Details ausblenden",
   "8321ff20c739dafb": "Diese Datei kann hier nicht angezeigt werden",
   "a43f940915211a99": [
     {
@@ -11974,10 +12013,15 @@
       "v": "v"
     }
   ],
+  "9497b827d9a3cda7": "Dismiss what's new",
+  "f7d06ec2e0bd689e": "What's new in T3 Code",
+  "00f100cab165a2df": "What's new",
+  "a28dff6e4d10f8e1": "Got it",
   "e7f35f60e6229cf5": "Desktop-App",
   "77be1b7e2a1d3d31": "{count, plural, one {{count} Rechner aktualisieren?} other {{count} Rechner aktualisieren?}}",
   "e4892b21e88abb60": "{count, plural, one {{count} Anbieter-Update} other {{count} Anbieter-Updates}}",
   "36d530903a763a14": "Suche nach weiteren…",
+  "bb7486fbaeea9213": "What's new",
   "f34dd019e6000fe3": "{count, plural, one {{count} übersprungen} other {{count} übersprungen}}",
   "fe4b772954403363": "{count, plural, one {{count} laufender Thread wird unterbrochen und kann nach dem Neustart fortgesetzt werden.} other {{count} laufende Threads werden unterbrochen und können nach dem Neustart fortgesetzt werden.}}",
   "c1a9fe8e24876f1d": "{count, plural, one {{count} laufender Thread wird unterbrochen.} other {{count} laufende Threads werden unterbrochen.}}",
@@ -12054,7 +12098,6 @@
   "2a3ca8b87905bb05": "Die Zwischenablage-API ist beim Kopieren der Fehlermeldung nicht verfügbar.",
   "a9b66b244a71f217": "Die Fehlermeldung konnte nicht in die Zwischenablage kopiert werden.",
   "35062fc45c2b1216": "Fehler kopiert",
-  "63790659557f315e": "Details anzeigen",
   "7423eb22b2f1768f": "Benachrichtigungen",
   "dea3a2118378111b": "Benachrichtigung schließen",
   "c6cf1b06e0433ca3": "Einrichtungsfortschritt",

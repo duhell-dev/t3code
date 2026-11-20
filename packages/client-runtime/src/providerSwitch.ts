@@ -142,13 +142,17 @@ export function providerSwitchLabel(
   let match = /^Switched from (\S+) to (\S+) because \S+ failed: (.+?)\. Continuing there\.$/.exec(
     message,
   );
+  // oxlint-disable-next-line t3code/no-untranslated-copy -- an old server notice in the server's English, like the new ones
   if (match) return `Switched to ${name(match[2])}: ${legacyCause(match[3]!)} on ${name(match[1])}`;
   match = /^Switched back from \S+ to (\S+) because /.exec(message);
+  // oxlint-disable-next-line t3code/no-untranslated-copy -- an old server notice in the server's English, like the new ones
   if (match) return `Back on ${name(match[1])}`;
   match = /^Resumed on (\S+): it is usable again/.exec(message);
+  // oxlint-disable-next-line t3code/no-untranslated-copy -- an old server notice in the server's English, like the new ones
   if (match) return `Back on ${name(match[1])}: usable again`;
   match = /^Provider failover stopped: (\S+) failed because (.+?), and no other /.exec(message);
   if (match) {
+    // oxlint-disable-next-line t3code/no-untranslated-copy -- an old server notice in the server's English, like the new ones
     return `Failover stopped: ${legacyCause(match[2]!)} on ${name(match[1])}, and no other account is usable`;
   }
   return message;

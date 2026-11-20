@@ -171,8 +171,10 @@ function UpdateEverythingDialogContent({
             </p>
           ))}
           {highlights !== null && highlights.length > 0 ? (
-            <section aria-label="What's new">
-              <h3 className="mb-1.5 font-medium text-sm">What's new</h3>
+            <section aria-label={gt("What's new")}>
+              <h3 className="mb-1.5 font-medium text-sm">
+                <T>What's new</T>
+              </h3>
               <ReleaseHighlightsList highlights={highlights} />
             </section>
           ) : null}

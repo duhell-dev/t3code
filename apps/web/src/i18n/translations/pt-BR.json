@@ -155,10 +155,9 @@
   "0cb7a36802fe8089": "O filtro {number} precisa de um caminho em body, headers ou query.",
   "1fa38fb049c6b56e": "O filtro {number} precisa de um caminho em body, headers ou query e de pelo menos um valor.",
   "31ec02bdcb3920d1": "O filtro {number} precisa de um caminho em body, headers ou query e de um valor.",
+  "62ae4688ece05590": "Armazenado com segurança, nunca mostrado ao agente",
   "81f613bb68d85bb7": "Fora do chat, em um arquivo privado que os comandos deste agente podem ler por 24 horas",
   "07b56c0c12bd2de1": "Fora do chat, em arquivos privados que os comandos deste agente podem ler por 24 horas",
-  "6435447ce7656f13": "Mostrar {label}",
-  "62ae4688ece05590": "Armazenado com segurança, nunca mostrado ao agente",
   "8c2d901183b4e219": "Cole o segredo",
   "610aea624f895a78": "Salvo com segurança e mantido privado",
   "329b7854b7e0546e": "Use uma referência do 1Password como {example}.",
@@ -892,6 +891,11 @@
   "2605da0149cd15f1": "Compactando o contexto",
   "39a82db18ca50c21": "Contexto compactado de {before} → {after} tokens",
   "885ae08a2160a158": "Contexto compactado",
+  "4d4981a1c5bd9728": "Executando comando",
+  "a078225c5f197cd2": "Comando com falha",
+  "37ab148aaa486051": "Comando recusado",
+  "0112efa1861c7a30": "Comando interrompido",
+  "930808342aac8010": "Comando executado",
   "3ab6b281a0991766": "{count, plural, =1 {Verificou os pull requests vinculados} other {Verificou os pull requests vinculados {count} vezes}}",
   "857e92a89b6b6257": "{count, plural, one {Leu {count} arquivo} other {Leu {count} arquivos}}",
   "466ac7fcdb97bb76": "{count, plural, one {Alterou {count} arquivo} other {Alterou {count} arquivos}}",
@@ -1381,13 +1385,13 @@
   "17783248201b6e43": "Tentando o provedor novamente ({progress})",
   "3ec9f7301a7e06dc": "{attempt, plural, one {Provedor recuperado ({progress} tentativas)} other {Provedor recuperado ({progress} tentativas)}}",
   "2d707aa220f213ec": "{attempt, plural, one {Limite de uso atingido após {progress} tentativas} other {Limite de uso atingido após {progress} tentativas}}",
+  "73459bd2b5bdfe05": "{summary} after {progress} retries",
   "7988500254403038": "{attempt, plural, one {Erro do provedor após {progress} tentativas} other {Erro do provedor após {progress} tentativas}}",
   "ed8b45cc0303e955": "Novas tentativas no provedor interrompidas ({progress})",
   "1578f868b0020f5f": "Tentando novamente em {delay}ms.",
   "4c9a0b64f128da3a": "Tentando novamente em {delay}s.",
   "5de030e595796117": "Thread criada",
   "c392becd445ecdba": "Pensando",
-  "930808342aac8010": "Comando executado",
   "c01f9d3f3624c903": "Comando",
   "fc933cf9b3edd743": "{fileName} alterado",
   "9bdd23eb0206783f": "Alteração de arquivo",
@@ -1707,6 +1711,10 @@
   "2e995206e087c3fc": "Tente responder depois que a conexão ou a resposta pendente for resolvida.",
   "604ec3067171a0d7": "Conversa",
   "d6182a057ea12624": "Thread principal",
+  "1edfb31fecfa5862": "Delegated from {environment}",
+  "23870d8ce4a4d70c": "An agent in “{thread}” on {environment} started this thread.",
+  "7f0abaf1ea336b0b": "From {environment}",
+  "bb961a3c36fe3ef1": "Started by an agent on {environment} through a linked environment.",
   "30fa4a764d11ae42": "Não foi possível baixar {name}",
   "4952f87dc98191a7": "O anexo não está disponível.",
   "2fd6d178493fb407": "Falha ao interromper o turno atual.",
@@ -2336,6 +2344,7 @@
   ],
   "aece11422a97a057": "Mantenha {shortcut} pressionado ou pressione duas vezes para sair",
   "404941d325a2755b": "Pressione {shortcut} de novo para sair",
+  "ec82041b98853760": "{count, plural, one {and {count} more highlight} other {and {count} more highlights}}",
   "48ef9d3971c97e7d": "Não foi possível reabrir a visualização",
   "158a785cabe10dda": "Painel do workspace",
   "9371d8cc390a8a1b": "As pré-visualizações no navegador só estão disponíveis no app para desktop do T3 Code.",
@@ -2430,6 +2439,22 @@
   "097b5f9ddc46e66c": "{action} para {serverLabel}",
   "f8725d62bc72896d": "Troque de canal em Sobre → Canal de atualização",
   "048a22fa4de22f96": "Atualize o app para desktop nessa máquina para atualizar este servidor.",
+  "abb7545be0190d7a": [
+    "Server already runs ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "c94e9794354fd047": [
+    "What's new in ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
   "e7a50ab49cdfd076": "Gerando novamente… ({count})",
   "6523a0ca24b57fde": "Gerar títulos novamente ({count})",
   "96adc8bf3106015d": "Desafixar ({count})",
@@ -3123,7 +3148,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "no computador que abriu esta página"]
+      "c": [
+        " ",
+        "no computador que abriu esta página"
+      ]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3135,7 +3163,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "· quem executar recebe este acesso"]
+      "c": [
+        " ",
+        "· quem executar recebe este acesso"
+      ]
     }
   ],
   "c54cc9c75db9dc58": "Aprove apenas um login que você acabou de iniciar.",
@@ -3223,16 +3254,8 @@
   "3390f0b2396998c0": "Citar a seleção no editor de mensagens",
   "e5dc8d61a6d178ed": "Encurtar seleção",
   "a5b06aaaba1d742f": "Citar",
-  "b1d8a5a24bd684e3": "subagente",
-  "5a805b37d8940816": "comando",
-  "da2da87e78bd6b11": "monitor",
-  "b034f8434dd8479d": "tarefa em segundo plano",
-  "519dd506361059c9": "Comando",
-  "b851b1f4c772dea4": "Aguardando",
-  "83915f0968cde2cc": "Executando",
-  "b90e87f4b7125237": "Detalhes",
-  "16dc67f5429d8bae": "Trabalho em segundo plano",
-  "2188eee8f81b0f51": "Abrir subagente",
+  "668e353261860b41": "Background work",
+  "613a5378d40c04c3": "Open",
   "3b03fc47eba632b4": "{count, plural, one {{formattedCount} arquivo alterado} other {{formattedCount} arquivos alterados}}",
   "ec9e0be8ec693302": "Recolher todas as pastas",
   "b791dd86f7991cc0": "Expandir todas as pastas",
@@ -3305,15 +3328,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "1c983a010570cdbb": [
-    "Iniciada por um agente em ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " por meio de um ambiente vinculado."
   ],
   "601807baf4e25b94": "Pré-visualizar {name}",
   "922a18febd2c86d7": "Pré-visualizar imagem",
@@ -3729,10 +3743,6 @@
   "ac511f991a3c1fab": "Pesquisa na web",
   "07e65dba2b16d3f7": "{count, plural, one {{path} e mais {count}} other {{path} e mais {count}}}",
   "6ab96e26bda35288": "Pensando",
-  "4d4981a1c5bd9728": "Executando comando",
-  "a078225c5f197cd2": "Comando com falha",
-  "37ab148aaa486051": "Comando recusado",
-  "0112efa1861c7a30": "Comando interrompido",
   "dc8ddcad32e2a50c": "Executando {program}",
   "f0db8caadd8f120e": "{program} falhou",
   "9a4cc1d1df413b99": "{program} recusado",
@@ -3969,6 +3979,7 @@
   "90062342f04966ff": "Atualize o servidor do T3 Code deste ambiente para navegar pelos pull requests.",
   "5e7157db126f1641": "Issues indisponíveis",
   "42ade0e14ff6af94": "Atualize o servidor do T3 Code deste ambiente para navegar pelas issues.",
+  "6435447ce7656f13": "Mostrar {label}",
   "993dcd04611f9571": "Salvar com segurança",
   "ccbe48efc8e30c52": "Excluir o chat paralelo \"{title}\"?",
   "3a859b690f41e899": "Isso apaga permanentemente o histórico dele.",
@@ -4020,6 +4031,8 @@
   "aae1e87a3919b642": "Talvez esteja com pouca memória. Forçar parada encerra os processos dele.",
   "e9d48e7c2bae2f68": "Forçando a parada...",
   "b9a547b1936fb658": "Forçar parada",
+  "58ac05b9fbce58ce": "Parando...",
+  "ebc642a4042f2fb0": "Stop all",
   "7100c70090280026": [
     "Aguardando · ",
     {
@@ -4036,8 +4049,7 @@
       "v": "v"
     }
   ],
-  "58ac05b9fbce58ce": "Parando...",
-  "4bf9327818b58241": "Parar",
+  "50515ce600db4a7e": "Stops this thread and everything it is waiting on: subagents, delegated tasks, and background commands. Queued messages wait until you send again.",
   "8fe132a05b04a8dc": [
     "Esta thread rodou por último em ",
     {
@@ -4428,6 +4440,7 @@
     }
   ],
   "a2aaca7ff8310186": "Abrir chat",
+  "2188eee8f81b0f51": "Abrir subagente",
   "a3048aaa541b7744": "Atividade",
   "4a3cbccb2beedeb0": "imagem",
   "36fb7b9046d2e288": "Chamadas de ferramenta",
@@ -4529,6 +4542,8 @@
   "717498f2abb43bfe": "Abrir a conversa de origem",
   "81cbd4ade23efc77": "Abrir fork",
   "c026ded437a942ee": "em {environment}",
+  "189cb97125af21c1": "Ocultar detalhes",
+  "63790659557f315e": "Mostrar detalhes",
   "29b99b6828ed8295": "Nova sessão",
   "42606de8b5a5e786": "Transferência de contexto pendente",
   "4d765811334b8edf": "Transferência de contexto",
@@ -4541,6 +4556,30 @@
     }
   ],
   "0832a03c4dc5eac4": "Thread criada",
+  "b61e4031558f0ac2": [
+    {
+      "t": "span",
+      "i": 1,
+      "c": "Provider error: "
+    },
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "6f1343e6e1c73712": [
+    {
+      "t": "span",
+      "i": 1,
+      "c": "Sent to the agent: "
+    },
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
   "50581b0c78ba5b66": "Microfone bloqueado",
   "8aca0bbde1b8c032": "Rascunho indisponível",
   "036e6ffe9fa26742": "Já está gravando",
@@ -4615,6 +4654,7 @@
   "6769d95831ddd2d2": "Base",
   "8a26eab2f53bfc4e": "Caminho",
   "dc60a55261658ce6": "Configuração",
+  "b90e87f4b7125237": "Detalhes",
   "23b8c1f7de1c0d65": "Abrir terminal",
   "d493907255bf9f03": "Trabalhar localmente",
   "6120db6070524903": "{name}, imagem com zoom",
@@ -4700,6 +4740,7 @@
   "82d82cdbe3b0f975": "{size} · Use {shortcut} para manter uma colagem grande no texto.",
   "247cd77b35ddb586": "Não foi possível ler ''{name}'' como imagem.",
   "7eccb44d5449e777": "''{name}'' é grande demais para anexar, mesmo após a compressão.",
+  "d07dd6dfd269680a": "Não foi possível restaurar {names}: o editor de mensagens atingiu o limite de {limit} anexos.",
   "1d4059658a0ab500": "Remover {name} da mensagem?\nEle é referenciado no seu texto; removê-lo também remove todas as referências.",
   "86261d5bd0651358": "Remover esta imagem da mensagem?\nEla é referenciada no seu texto; removê-la também remove todas as referências.",
   "f70c49e9f30807a3": "O texto colado é grande demais para esta mensagem",
@@ -4772,7 +4813,6 @@
   "c809a3c353e67a28": "O armazenamento do navegador rejeitou a atualização, então este item ainda pode estar lá após recarregar.",
   "1a4bc01f0ca772c2": "{names} excedeu o limite de tamanho dos guardados quando este prompt foi salvo.",
   "bb3b4ad32b596e11": "Não foi possível ler {names} quando este prompt foi salvo.",
-  "d07dd6dfd269680a": "Não foi possível restaurar {names}: o editor de mensagens atingiu o limite de {limit} anexos.",
   "7e4a6a2c84d34a80": "{names}: os arquivos guardados são mantidos por 24 horas e este upload expirou. Anexe o arquivo novamente.",
   "1e3ede33afee71ba": "Alguns anexos não foram restaurados",
   "98c76143d9aae871": "O item guardado pode voltar",
@@ -6270,7 +6310,6 @@
   "fbaa47ab5f038cfc": "A pré-visualização só está disponível no app para desktop do T3 Code.",
   "2f12af145a5b64f4": "Pareie este cliente novamente com acesso à pré-visualização para controlar as pré-visualizações no navegador.",
   "ab063600168940a1": "Remover {url} do histórico",
-  "189cb97125af21c1": "Ocultar detalhes",
   "8321ff20c739dafb": "Este arquivo não pode ser mostrado aqui",
   "a43f940915211a99": [
     {
@@ -11971,10 +12010,15 @@
       "v": "v"
     }
   ],
+  "9497b827d9a3cda7": "Dismiss what's new",
+  "f7d06ec2e0bd689e": "What's new in T3 Code",
+  "00f100cab165a2df": "What's new",
+  "a28dff6e4d10f8e1": "Got it",
   "e7f35f60e6229cf5": "App desktop",
   "77be1b7e2a1d3d31": "{count, plural, one {Atualizar {count} máquina?} other {Atualizar {count} máquinas?}}",
   "e4892b21e88abb60": "{count, plural, one {{count} atualização de provedor} other {{count} atualizações de provedores}}",
   "36d530903a763a14": "Verificando mais…",
+  "bb7486fbaeea9213": "What's new",
   "f34dd019e6000fe3": "{count, plural, one {{count} ignorada} other {{count} ignoradas}}",
   "fe4b772954403363": "{count, plural, one {{count} thread em execução será interrompida e pode ser retomada após a reinicialização.} other {{count} threads em execução serão interrompidas e podem ser retomadas após a reinicialização.}}",
   "c1a9fe8e24876f1d": "{count, plural, one {{count} thread em execução será interrompida.} other {{count} threads em execução serão interrompidas.}}",
@@ -12051,7 +12095,6 @@
   "2a3ca8b87905bb05": "A API da área de transferência não está disponível ao copiar a mensagem de erro.",
   "a9b66b244a71f217": "Falha ao copiar a mensagem de erro para a área de transferência.",
   "35062fc45c2b1216": "Erro copiado",
-  "63790659557f315e": "Mostrar detalhes",
   "7423eb22b2f1768f": "Notificações",
   "dea3a2118378111b": "Dispensar notificação",
   "c6cf1b06e0433ca3": "Progresso da configuração",

@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { T, useGT } from "gt-react";
 import { MegaphoneIcon, XIcon } from "lucide-react";
 import { useEffect } from "react";
 
@@ -14,6 +15,7 @@ const SeenVersionSchema = Schema.NullOr(Schema.String);
 
 /** Once per update with highlights: what this app's new version brings since the last one seen. */
 export function SidebarWhatsNewNotice() {
+  const gt = useGT();
   const [seenVersion, setSeenVersion] = useLocalStorage(
     WHATS_NEW_SEEN_STORAGE_KEY,
     null,
@@ -44,18 +46,22 @@ export function SidebarWhatsNewNotice() {
           }
         >
           <MegaphoneIcon aria-hidden className="size-3.5 shrink-0" />
-          <span className="min-w-0 truncate">What's new in T3 Code</span>
+          <span className="min-w-0 truncate">
+            <T>What's new in T3 Code</T>
+          </span>
         </PopoverTrigger>
         <PopoverPopup side="top" align="start" padding="compact" width="sm">
           <div className="flex flex-col gap-2">
             <div>
-              <div className="font-medium text-sm">What's new</div>
+              <div className="font-medium text-sm">
+                <T>What's new</T>
+              </div>
               <div className="text-muted-foreground text-xs">{APP_VERSION}</div>
             </div>
             <ReleaseHighlightsList highlights={highlights} />
             <div className="flex justify-end">
               <Button size="xs" variant="outline" onClick={dismiss}>
-                Got it
+                <T>Got it</T>
               </Button>
             </div>
           </div>
@@ -63,7 +69,7 @@ export function SidebarWhatsNewNotice() {
       </Popover>
       <button
         type="button"
-        aria-label="Dismiss what's new"
+        aria-label={gt("Dismiss what's new")}
         className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-lg text-sidebar-muted-foreground hover:text-sidebar-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={dismiss}
       >

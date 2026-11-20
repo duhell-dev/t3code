@@ -658,6 +658,7 @@ function ProviderSwitchRow(props: {
   readonly item: Extract<OrchestrationV2TurnItem, { type: "system_notice" }>;
   readonly runs: ReadonlyArray<HandoffTimelineRun>;
 }) {
+  const gt = useGT();
   const [expanded, setExpanded] = useState(false);
   const providers =
     useAtomValue(serverEnvironment.providersValueAtom(props.environmentId)) ??
@@ -677,7 +678,7 @@ function ProviderSwitchRow(props: {
         label={label}
         icon={ArrowRightLeftIcon}
         tone={detail?.signal === "provider-failover-stop" ? "danger" : "neutral"}
-        actionLabel={expanded ? "Hide details" : "Show details"}
+        actionLabel={expanded ? gt("Hide details") : gt("Show details")}
         onAction={() => setExpanded(!expanded)}
       />
       {expanded ? (
@@ -687,8 +688,10 @@ function ProviderSwitchRow(props: {
           ) : null}
           {detail?.failure ? (
             <p className="whitespace-pre-wrap break-words">
-              <span className="font-medium text-foreground/80">Provider error: </span>
-              {detail.failure.message}
+              <T>
+                <span className="font-medium text-foreground/80">Provider error: </span>
+                <Var>{detail.failure.message}</Var>
+              </T>
             </p>
           ) : null}
           {detail?.handoffs.map((handoff) => (
@@ -702,8 +705,10 @@ function ProviderSwitchRow(props: {
           ))}
           {detail?.continuation ? (
             <p className="whitespace-pre-wrap break-words">
-              <span className="font-medium text-foreground/80">Sent to the agent: </span>
-              {detail.continuation}
+              <T>
+                <span className="font-medium text-foreground/80">Sent to the agent: </span>
+                <Var>{detail.continuation}</Var>
+              </T>
             </p>
           ) : null}
         </div>

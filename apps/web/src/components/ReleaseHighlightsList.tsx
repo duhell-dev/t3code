@@ -1,4 +1,5 @@
 import type { ReleaseHighlight } from "@t3tools/shared/releaseHighlights";
+import { useGT } from "gt-react";
 
 const DEFAULT_LIMIT = 8;
 
@@ -12,6 +13,7 @@ export function ReleaseHighlightsList({
   readonly limit?: number;
   readonly className?: string;
 }) {
+  const gt = useGT();
   const shown = highlights.slice(0, limit);
   const more = highlights.length - shown.length;
   return (
@@ -26,7 +28,12 @@ export function ReleaseHighlightsList({
       </ul>
       {more > 0 ? (
         <p className="mt-1.5 pl-4 text-muted-foreground text-xs">
-          {`and ${more} more ${more === 1 ? "highlight" : "highlights"}`}
+          {gt(
+            "{count, plural, one {and {count} more highlight} other {and {count} more highlights}}",
+            {
+              count: more,
+            },
+          )}
         </p>
       ) : null}
     </div>

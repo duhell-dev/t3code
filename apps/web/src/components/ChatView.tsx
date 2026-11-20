@@ -988,13 +988,18 @@ export default function ChatView(props: ChatViewProps) {
   const headerThreadOrigin =
     delegatedFrom !== null && delegatedFromLabel !== null
       ? {
-          badge: `Delegated from ${delegatedFromLabel}`,
-          detail: `An agent in “${delegatedFromThread?.title ?? delegatedFrom.title}” on ${delegatedFromLabel} started this thread.`,
+          badge: gt("Delegated from {environment}", { environment: delegatedFromLabel }),
+          detail: gt("An agent in “{thread}” on {environment} started this thread.", {
+            thread: delegatedFromThread?.title ?? delegatedFrom.title,
+            environment: delegatedFromLabel,
+          }),
         }
       : linkOriginLabel !== null
         ? {
-            badge: `From ${linkOriginLabel}`,
-            detail: `Started by an agent on ${linkOriginLabel} through a linked environment.`,
+            badge: gt("From {environment}", { environment: linkOriginLabel }),
+            detail: gt("Started by an agent on {environment} through a linked environment.", {
+              environment: linkOriginLabel,
+            }),
           }
         : null;
   // The header's breadcrumb opens a parent in this environment only.

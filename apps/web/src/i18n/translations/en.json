@@ -155,10 +155,9 @@
   "0cb7a36802fe8089": "Filter {number} needs a path under body, headers or query.",
   "1fa38fb049c6b56e": "Filter {number} needs a path under body, headers or query, and at least one value.",
   "31ec02bdcb3920d1": "Filter {number} needs a path under body, headers or query, and a value.",
+  "62ae4688ece05590": "Stored securely, never shown to the agent",
   "81f613bb68d85bb7": "Kept out of chat, in a private file this agent's commands can read for 24 hours",
   "07b56c0c12bd2de1": "Kept out of chat, in private files this agent's commands can read for 24 hours",
-  "6435447ce7656f13": "Show {label}",
-  "62ae4688ece05590": "Stored securely, never shown to the agent",
   "8c2d901183b4e219": "Paste the secret",
   "610aea624f895a78": "Saved securely and kept private",
   "329b7854b7e0546e": "Use a 1Password reference like {example}.",
@@ -892,6 +891,11 @@
   "2605da0149cd15f1": "Compacting context",
   "39a82db18ca50c21": "Context compacted {before} → {after} tokens",
   "885ae08a2160a158": "Context compacted",
+  "4d4981a1c5bd9728": "Running command",
+  "a078225c5f197cd2": "Failed command",
+  "37ab148aaa486051": "Declined command",
+  "0112efa1861c7a30": "Stopped command",
+  "930808342aac8010": "Ran command",
   "3ab6b281a0991766": "{count, plural, =1 {Checked linked pull requests} other {Checked linked pull requests {count} times}}",
   "857e92a89b6b6257": "{count, plural, one {Read {count} file} other {Read {count} files}}",
   "466ac7fcdb97bb76": "{count, plural, one {Changed {count} file} other {Changed {count} files}}",
@@ -1381,13 +1385,13 @@
   "17783248201b6e43": "Retrying provider ({progress})",
   "3ec9f7301a7e06dc": "{attempt, plural, one {Provider recovered ({progress} retries)} other {Provider recovered ({progress} retries)}}",
   "2d707aa220f213ec": "{attempt, plural, one {Usage limit reached after {progress} retries} other {Usage limit reached after {progress} retries}}",
+  "73459bd2b5bdfe05": "{summary} after {progress} retries",
   "7988500254403038": "{attempt, plural, one {Provider error after {progress} retries} other {Provider error after {progress} retries}}",
   "ed8b45cc0303e955": "Provider retry stopped ({progress})",
   "1578f868b0020f5f": "Retrying in {delay}ms.",
   "4c9a0b64f128da3a": "Retrying in {delay}s.",
   "5de030e595796117": "Created thread",
   "c392becd445ecdba": "Thinking",
-  "930808342aac8010": "Ran command",
   "c01f9d3f3624c903": "Command",
   "fc933cf9b3edd743": "Changed {fileName}",
   "9bdd23eb0206783f": "File change",
@@ -1707,6 +1711,10 @@
   "2e995206e087c3fc": "Try replying after the connection or pending input is resolved.",
   "604ec3067171a0d7": "Conversation",
   "d6182a057ea12624": "Parent thread",
+  "1edfb31fecfa5862": "Delegated from {environment}",
+  "23870d8ce4a4d70c": "An agent in “{thread}” on {environment} started this thread.",
+  "7f0abaf1ea336b0b": "From {environment}",
+  "bb961a3c36fe3ef1": "Started by an agent on {environment} through a linked environment.",
   "30fa4a764d11ae42": "Could not download {name}",
   "4952f87dc98191a7": "The attachment is unavailable.",
   "2fd6d178493fb407": "Failed to interrupt the current turn.",
@@ -2336,6 +2344,7 @@
   ],
   "aece11422a97a057": "Hold {shortcut} or press twice to quit",
   "404941d325a2755b": "Press {shortcut} again to quit",
+  "ec82041b98853760": "{count, plural, one {and {count} more highlight} other {and {count} more highlights}}",
   "48ef9d3971c97e7d": "Could not reopen view",
   "158a785cabe10dda": "Workspace panel",
   "9371d8cc390a8a1b": "Browser previews are only available in the T3 Code desktop app.",
@@ -2430,6 +2439,22 @@
   "097b5f9ddc46e66c": "{action} for {serverLabel}",
   "f8725d62bc72896d": "Switch tracks in About → Update track",
   "048a22fa4de22f96": "Update the desktop app on that machine to update this server.",
+  "abb7545be0190d7a": [
+    "Server already runs ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
+  "c94e9794354fd047": [
+    "What's new in ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    }
+  ],
   "e7a50ab49cdfd076": "Regenerating… ({count})",
   "6523a0ca24b57fde": "Regenerate titles ({count})",
   "96adc8bf3106015d": "Unpin ({count})",
@@ -3123,7 +3148,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "on the computer that opened this page"]
+      "c": [
+        " ",
+        "on the computer that opened this page"
+      ]
     }
   ],
   "b2d53b4d1d48fbef": [
@@ -3135,7 +3163,10 @@
     {
       "t": "span",
       "i": 2,
-      "c": [" ", "· whoever runs it gets this access"]
+      "c": [
+        " ",
+        "· whoever runs it gets this access"
+      ]
     }
   ],
   "c54cc9c75db9dc58": "Only approve a sign-in you just started.",
@@ -3223,16 +3254,8 @@
   "3390f0b2396998c0": "Cite selection in composer",
   "e5dc8d61a6d178ed": "Shorten selection",
   "a5b06aaaba1d742f": "Cite",
-  "b1d8a5a24bd684e3": "subagent",
-  "5a805b37d8940816": "command",
-  "da2da87e78bd6b11": "monitor",
-  "b034f8434dd8479d": "background task",
-  "519dd506361059c9": "Command",
-  "b851b1f4c772dea4": "Waiting",
-  "83915f0968cde2cc": "Running",
-  "b90e87f4b7125237": "Details",
-  "16dc67f5429d8bae": "Background work",
-  "2188eee8f81b0f51": "Open subagent",
+  "668e353261860b41": "Background work",
+  "613a5378d40c04c3": "Open",
   "3b03fc47eba632b4": "{count, plural, one {{formattedCount} changed file} other {{formattedCount} changed files}}",
   "ec9e0be8ec693302": "Collapse all folders",
   "b791dd86f7991cc0": "Expand all folders",
@@ -3305,15 +3328,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "1c983a010570cdbb": [
-    "Started by an agent on ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " through a linked environment."
   ],
   "601807baf4e25b94": "Preview {name}",
   "922a18febd2c86d7": "Preview image",
@@ -3730,10 +3744,6 @@
   "ac511f991a3c1fab": "Web search",
   "07e65dba2b16d3f7": "{count, plural, one {{path} +{count} more} other {{path} +{count} more}}",
   "6ab96e26bda35288": "Thinking",
-  "4d4981a1c5bd9728": "Running command",
-  "a078225c5f197cd2": "Failed command",
-  "37ab148aaa486051": "Declined command",
-  "0112efa1861c7a30": "Stopped command",
   "dc8ddcad32e2a50c": "Running {program}",
   "f0db8caadd8f120e": "Failed {program}",
   "9a4cc1d1df413b99": "Declined {program}",
@@ -3970,6 +3980,7 @@
   "90062342f04966ff": "Update this environment's T3 Code server to browse pull requests.",
   "5e7157db126f1641": "Issues unavailable",
   "42ade0e14ff6af94": "Update this environment's T3 Code server to browse issues.",
+  "6435447ce7656f13": "Show {label}",
   "993dcd04611f9571": "Save securely",
   "ccbe48efc8e30c52": "Delete side chat \"{title}\"?",
   "3a859b690f41e899": "This permanently clears its conversation history.",
@@ -4021,6 +4032,8 @@
   "aae1e87a3919b642": "It may be short on memory. Force stop kills its processes.",
   "e9d48e7c2bae2f68": "Force stopping...",
   "b9a547b1936fb658": "Force stop",
+  "58ac05b9fbce58ce": "Stopping...",
+  "ebc642a4042f2fb0": "Stop all",
   "7100c70090280026": [
     "Waiting · ",
     {
@@ -4037,8 +4050,7 @@
       "v": "v"
     }
   ],
-  "58ac05b9fbce58ce": "Stopping...",
-  "4bf9327818b58241": "Stop",
+  "50515ce600db4a7e": "Stops this thread and everything it is waiting on: subagents, delegated tasks, and background commands. Queued messages wait until you send again.",
   "8fe132a05b04a8dc": [
     "This thread last ran on ",
     {
@@ -4430,6 +4442,7 @@
     }
   ],
   "a2aaca7ff8310186": "Open chat",
+  "2188eee8f81b0f51": "Open subagent",
   "a3048aaa541b7744": "Activity",
   "4a3cbccb2beedeb0": "image",
   "36fb7b9046d2e288": "Tool calls",
@@ -4531,6 +4544,8 @@
   "717498f2abb43bfe": "Open source conversation",
   "81cbd4ade23efc77": "Open fork",
   "c026ded437a942ee": "on {environment}",
+  "189cb97125af21c1": "Hide details",
+  "63790659557f315e": "Show details",
   "29b99b6828ed8295": "New session",
   "42606de8b5a5e786": "Context handoff pending",
   "4d765811334b8edf": "Context handoff",
@@ -4543,6 +4558,30 @@
     }
   ],
   "0832a03c4dc5eac4": "Created thread",
+  "b61e4031558f0ac2": [
+    {
+      "t": "span",
+      "i": 1,
+      "c": "Provider error: "
+    },
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
+  "6f1343e6e1c73712": [
+    {
+      "t": "span",
+      "i": 1,
+      "c": "Sent to the agent: "
+    },
+    {
+      "i": 2,
+      "k": "_gt_value_2",
+      "v": "v"
+    }
+  ],
   "50581b0c78ba5b66": "Mic blocked",
   "8aca0bbde1b8c032": "Draft unavailable",
   "036e6ffe9fa26742": "Already recording",
@@ -4617,6 +4656,7 @@
   "6769d95831ddd2d2": "Base",
   "8a26eab2f53bfc4e": "Path",
   "dc60a55261658ce6": "Setup",
+  "b90e87f4b7125237": "Details",
   "23b8c1f7de1c0d65": "Open terminal",
   "d493907255bf9f03": "Work locally",
   "6120db6070524903": "{name}, zoomable image",
@@ -4702,6 +4742,7 @@
   "82d82cdbe3b0f975": "{size} · Use {shortcut} to keep a large paste inline.",
   "247cd77b35ddb586": "''{name}'' could not be read as an image.",
   "7eccb44d5449e777": "''{name}'' is too large to attach, even after compression.",
+  "d07dd6dfd269680a": "{names} could not be restored: the composer is at its {limit}-attachment limit.",
   "1d4059658a0ab500": "Remove {name} from the message?\nIt is referenced in your text; removing it also removes every reference.",
   "86261d5bd0651358": "Remove this image from the message?\nIt is referenced in your text; removing it also removes every reference.",
   "f70c49e9f30807a3": "Pasted text is too large for this message",
@@ -4774,7 +4815,6 @@
   "c809a3c353e67a28": "Browser storage rejected the update, so this entry could still be there after a reload.",
   "1a4bc01f0ca772c2": "{names} exceeded the stash size limit when this prompt was saved.",
   "bb3b4ad32b596e11": "{names} could not be read when this prompt was saved.",
-  "d07dd6dfd269680a": "{names} could not be restored: the composer is at its {limit}-attachment limit.",
   "7e4a6a2c84d34a80": "{names}: stashed files are kept for 24 hours and this upload expired. Attach the file again.",
   "1e3ede33afee71ba": "Some attachments were not restored",
   "98c76143d9aae871": "Stash entry may come back",
@@ -6273,7 +6313,6 @@
   "fbaa47ab5f038cfc": "Preview is only available in the T3 Code desktop app.",
   "2f12af145a5b64f4": "Pair this client again with preview access to control browser previews.",
   "ab063600168940a1": "Remove {url} from history",
-  "189cb97125af21c1": "Hide details",
   "8321ff20c739dafb": "This file can’t be shown here",
   "a43f940915211a99": [
     {
@@ -11982,10 +12021,15 @@
       "v": "v"
     }
   ],
+  "9497b827d9a3cda7": "Dismiss what's new",
+  "f7d06ec2e0bd689e": "What's new in T3 Code",
+  "00f100cab165a2df": "What's new",
+  "a28dff6e4d10f8e1": "Got it",
   "e7f35f60e6229cf5": "Desktop app",
   "77be1b7e2a1d3d31": "{count, plural, one {Update {count} machine?} other {Update {count} machines?}}",
   "e4892b21e88abb60": "{count, plural, one {{count} provider update} other {{count} provider updates}}",
   "36d530903a763a14": "Checking for more…",
+  "bb7486fbaeea9213": "What's new",
   "f34dd019e6000fe3": "{count, plural, one {{count} skipped} other {{count} skipped}}",
   "fe4b772954403363": "{count, plural, one {{count} running thread will be interrupted and can resume after the restart.} other {{count} running threads will be interrupted and can resume after the restart.}}",
   "c1a9fe8e24876f1d": "{count, plural, one {{count} running thread will be interrupted.} other {{count} running threads will be interrupted.}}",
@@ -12062,7 +12106,6 @@
   "2a3ca8b87905bb05": "Clipboard API is unavailable while copying error-message.",
   "a9b66b244a71f217": "Failed to copy error-message to the clipboard.",
   "35062fc45c2b1216": "Copied error",
-  "63790659557f315e": "Show details",
   "7423eb22b2f1768f": "Notifications",
   "dea3a2118378111b": "Dismiss notification",
   "c6cf1b06e0433ca3": "Setup progress",

@@ -26,7 +26,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { CircleArrowUpIcon } from "lucide-react";
 import { type ComponentProps, useRef, useState } from "react";
-import { msg, T, useGT, useMessages } from "gt-react";
+import { msg, T, useGT, useMessages, Var } from "gt-react";
 import { m, type MessageResolver } from "../i18n/messages";
 
 import { requestConfirmDialog } from "~/confirmDialog";
@@ -423,7 +423,11 @@ export function ServerUpdateAction({
 
   if (serverAlreadyAtTarget({ targetVersion, channel }, serverVersion)) {
     return (
-      <span className="text-muted-foreground text-xs">Server already runs {serverVersion}</span>
+      <span className="text-muted-foreground text-xs">
+        <T>
+          Server already runs <Var>{serverVersion}</Var>
+        </T>
+      </span>
     );
   }
 
@@ -443,7 +447,11 @@ export function ServerUpdateAction({
   const whatsNew =
     highlights !== null && highlights.length > 0 ? (
       <div className="max-w-80 py-1">
-        <div className="mb-1.5 font-medium text-xs">What's new in {targetVersion}</div>
+        <div className="mb-1.5 font-medium text-xs">
+          <T>
+            What's new in <Var>{targetVersion}</Var>
+          </T>
+        </div>
         <ReleaseHighlightsList highlights={highlights} limit={5} />
       </div>
     ) : null;
