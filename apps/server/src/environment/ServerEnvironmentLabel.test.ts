@@ -101,3 +101,29 @@ it.effect("qualifies the inherited Windows hostname only inside WSL", () =>
     }
   }),
 );
+
+// duhell: two servers on one machine would otherwise share the machine's name.
+it.effect("prefers T3CODE_ENVIRONMENT_LABEL over the machine's names", () =>
+  Effect.gen(function* () {
+    const resolve = (environment: NodeJS.ProcessEnv) =>
+      resolveServerEnvironmentLabel({ cwdBaseName: "project" }).pipe(
+        Effect.provideService(HostProcess.Platform, "linux"),
+        Effect.provideService(HostProcess.Hostname, "build-box"),
+        Effect.provideService(HostProcess.Environment, environment),
+        Effect.provideService(ProcessRunner.ProcessRunner, exitsWithFailure),
+        Effect.provide(
+          FileSystem.layerNoop({
+            exists: (path) => Effect.succeed(path === "/etc/machine-info"),
+            readFileString: () => Effect.succeed('PRETTY_HOSTNAME="Workstation"'),
+          }),
+        ),
+      );
+    assert.equal(
+      yield* resolve({ T3CODE_ENVIRONMENT_LABEL: "  workstation shared  " }),
+      "workstation shared",
+    );
+    // Empty or blank falls back to the machine's pretty name.
+    assert.equal(yield* resolve({ T3CODE_ENVIRONMENT_LABEL: "   " }), "Workstation");
+    assert.equal(yield* resolve({}), "Workstation");
+  }),
+);

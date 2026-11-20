@@ -52,4 +52,9 @@ that served the page all offer it. A failed read leaves the target at the client
 the server that served the page runs a newer build, the page reloads into it after any update run
 there has finished, once per build. The desktop app keeps using its own updater.
 
+## Server label
+
+Set `T3CODE_ENVIRONMENT_LABEL` on a server to name it in every client and linked environment, ahead
+of the machine's name; useful when one machine runs several servers.
+
 Operating notes are kept outside this repository.
