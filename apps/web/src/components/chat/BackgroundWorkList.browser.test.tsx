@@ -97,3 +97,37 @@ it("expands to the full command for short labels and keeps pending tasks current
   await screen.getByRole("button", { name: "Waiting · Native fallback" }).click();
   await expect.element(list).not.toBeInTheDocument();
 });
+
+it("gives a subagent the same status as the background work line", async () => {
+  await using screen = await render(
+    <ThreadNow
+      attention={null}
+      syncPhase={null}
+      goal={null}
+      work={backgroundWorkNowItem({
+        environmentId: EnvironmentId.make("test"),
+        threadId: ThreadId.make("thread"),
+        tasks: [
+          {
+            taskId: "subagent-task",
+            kind: "subagent",
+            description: "Review refactor diffs",
+            childThreadId: ThreadId.make("child"),
+          },
+        ],
+        turnItems: [],
+        runIsLive: false,
+        stopDisabled: false,
+        stopping: false,
+        onStop: async () => undefined,
+        onOpenThread: () => undefined,
+      })}
+    />,
+  );
+  // duhell: the line's title expands into the list instead of a Details dialog, and the list
+  // names the task under the line's own status.
+  await screen.getByRole("button", { name: "Waiting · Review refactor diffs" }).click();
+  await expect
+    .element(page.getByRole("list", { name: "Background work" }).getByText("Review refactor diffs"))
+    .toBeVisible();
+});
