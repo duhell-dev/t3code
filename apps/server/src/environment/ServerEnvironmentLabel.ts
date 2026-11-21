@@ -192,17 +192,9 @@ const isWsl = Effect.fn("isWsl")(function* () {
   return kernelRelease.toLowerCase().includes("microsoft");
 });
 
-/** duhell: names one of several servers on the same machine, ahead of the machine's name. */
-export const ENVIRONMENT_LABEL_ENV = "T3CODE_ENVIRONMENT_LABEL";
-
 export const resolveServerEnvironmentLabel = Effect.fn("resolveServerEnvironmentLabel")(function* (
   input: ResolveServerEnvironmentLabelInput,
 ) {
-  const configured = normalizeLabel((yield* HostProcess.Environment)[ENVIRONMENT_LABEL_ENV]);
-  if (configured) {
-    return configured;
-  }
-
   const friendlyHostLabel = yield* resolveFriendlyHostLabel();
   if (friendlyHostLabel) {
     return friendlyHostLabel;
