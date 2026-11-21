@@ -459,6 +459,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const restoringThreadPosition = positionedThreadKey !== listIdentityKey;
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const [settlingListIdentity, setSettlingListIdentity] = useState<string | null>(listIdentityKey);
+  // The thread whose opening (the jump to its "New" line) is done for this visit.
+  const [openedAtCatchUpFor, setOpenedAtCatchUpFor] = useState<string | null>(null);
   const [playingAudioRows, setPlayingAudioRows] = useState<ReadonlyMap<HTMLAudioElement, string>>(
     () => new Map(),
   );
@@ -480,6 +482,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
     });
     setPositionedThreadKey(null);
     setSettlingListIdentity(listIdentityKey);
+    // A thread left before it finished opening must not count as opened when it comes back.
+    setOpenedAtCatchUpFor(null);
     // A viewer pinned in another thread must not keep live follow off here,
     // nor when that thread comes back.
     setFullscreenAppRowId(null);
@@ -770,17 +774,28 @@ const ConversationTimeline = memo(function ConversationTimeline({
     revealedMessageId,
   });
   const rows = useStableRows(rawRows, listIdentityKey);
-  // The reader is at the end once the opening scroll, and the jump to the "New" line, are done.
-  const [readerAtEnd, setReaderAtEnd] = useState(false);
-  const [openedAtCatchUpFor, setOpenedAtCatchUpFor] = useState<string | null>(null);
+  // Where the reader is, measured after every scroll, layout and resize of the shown thread.
+  const [readerView, setReaderView] = useState({
+    identity: listIdentityKey,
+    atEnd: false,
+    lineInView: false,
+  });
+  const readerPositioned =
+    readerView.identity === listIdentityKey &&
+    settlingListIdentity === null &&
+    openedAtCatchUpFor === listIdentityKey;
   const reading = useTimelineReading({
     identity: listIdentityKey,
     boundary: catchUpBoundary,
-    atEnd: readerAtEnd && settlingListIdentity === null && openedAtCatchUpFor === listIdentityKey,
+    // The reader reads once the opening scroll, and the jump to the "New" line, are done.
+    atEnd: readerPositioned && readerView.atEnd,
+    lineInView: readerPositioned && readerView.lineInView,
     rows,
     entries: timelineEntries,
   });
   const timelineCatchUp = reading.catchUp;
+  const catchUpLineRowId = timelineCatchUp?.lineRowId ?? null;
+  const noteReaderInteraction = useStableCallback(() => reading.noteInteraction());
   const matchedApprovalRequestIds = new Set<string>();
   for (const row of pendingApprovalRequestIds.size > 0 ? rows : []) {
     const entries =
@@ -997,6 +1012,44 @@ const ConversationTimeline = memo(function ConversationTimeline({
     );
   });
 
+  const measureReader = useStableCallback((lineRowId: string | null = catchUpLineRowId) => {
+    const list = listRef.current;
+    const state = list?.getState?.();
+    const scrollNode = list?.getScrollableNode();
+    if (restoringThreadPosition || citationPositioning || !scrollNode || state?.data !== rows)
+      return;
+    // The element's own geometry: LegendList's scroll state trails the last scroll event by a frame.
+    const isAtEnd = resolveTimelineIsAtEnd({
+      contentLength: scrollNode.scrollHeight,
+      scroll: scrollNode.scrollTop,
+      scrollLength: scrollNode.clientHeight,
+    });
+    // Following the end counts too, so a growing streamed row does not read as a scroll away.
+    // LegendList re-arms its flag when its opening scroll ends, after a jump released follow.
+    const atEnd = isAtEnd === true || (liveFollowEnabled && state.isFollowingEnd === true);
+    const line =
+      lineRowId === null
+        ? null
+        : scrollNode
+            .querySelector(`[data-timeline-row-id="${CSS.escape(lineRowId)}"]`)
+            ?.closest("[data-timeline-root]")
+            ?.querySelector("[data-thread-catch-up-line]");
+    let lineInView = false;
+    if (line) {
+      const viewport = scrollNode.getBoundingClientRect();
+      const bounds = line.getBoundingClientRect();
+      lineInView =
+        bounds.bottom > viewport.top && bounds.top < viewport.bottom - contentInsetEndAdjustment;
+    }
+    setReaderView((current) =>
+      current.identity === listIdentityKey &&
+      current.atEnd === atEnd &&
+      current.lineInView === lineInView
+        ? current
+        : { identity: listIdentityKey, atEnd, lineInView },
+    );
+  });
+
   const minimapRefreshFrameRef = useRef<number | null>(null);
   const scheduleMinimapRefresh = useStableCallback(() => {
     if (minimapRefreshFrameRef.current !== null) return;
@@ -1004,6 +1057,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     minimapRefreshFrameRef.current = requestAnimationFrame(() => {
       minimapRefreshFrameRef.current = null;
       refreshMinimap();
+      measureReader();
     });
   });
 
@@ -1059,11 +1113,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const handleScroll = () => {
     if (restoringThreadPosition || listRef.current?.getState?.().data !== rows) return;
     const isAtEnd = rememberPosition(liveFollowEnabled && !anchoredEndSpace);
-    if (isAtEnd !== undefined && !citationPositioning) {
-      onIsAtEndChange(isAtEnd);
-      // Following the end counts too, so a growing streamed row does not read as a scroll away.
-      setReaderAtEnd(isAtEnd || listRef.current?.getState?.().isFollowingEnd === true);
-    }
+    if (isAtEnd !== undefined && !citationPositioning) onIsAtEndChange(isAtEnd);
+    measureReader();
     scheduleMinimapRefresh();
   };
 
@@ -1111,9 +1162,18 @@ const ConversationTimeline = memo(function ConversationTimeline({
     const stopObserving = observeResize(viewportElement, () => {
       measureTimelineGutter(viewportElement);
       scheduleMinimapRefresh();
+      measureReader();
     });
+    // The wheel scrolls a window without focusing it, so using the timeline counts as looking.
+    const events = ["wheel", "pointerdown", "touchstart", "keydown"] as const;
+    for (const event of events) {
+      viewportElement.addEventListener(event, noteReaderInteraction, { passive: true });
+    }
     return () => {
       stopObserving();
+      for (const event of events) {
+        viewportElement.removeEventListener(event, noteReaderInteraction);
+      }
       setTimelineViewportElement(null);
     };
   };
@@ -1397,8 +1457,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
           className="chat-content-lane overflow-x-clip"
           data-timeline-root="true"
         >
-          {catchUpBoundary !== null && timelineCatchUp?.rowId === item.id ? (
-            <ThreadCatchUpLine boundary={catchUpBoundary} />
+          {timelineCatchUp?.lineAt != null && timelineCatchUp.lineRowId === item.id ? (
+            <ThreadCatchUpLine since={timelineCatchUp.lineAt} />
           ) : null}
           <AudioPreviewUnmountContext value={onAudioUnmount}>
             <TimelineRowContent row={item} />
@@ -1411,22 +1471,27 @@ const ConversationTimeline = memo(function ConversationTimeline({
     identity: listIdentityKey,
     rowCount: rows.length,
     sharedState,
-    catchUpRowId: timelineCatchUp?.rowId ?? null,
+    catchUpLineRowId,
   };
+  const catchUpLineIndex =
+    catchUpLineRowId === null ? -1 : rows.findIndex((row) => row.id === catchUpLineRowId);
   const jumpToCatchUp = useStableCallback((opening: boolean) => {
-    const index = timelineCatchUp ? rows.findIndex((row) => row.id === timelineCatchUp.rowId) : -1;
-    if (index < 0) return;
+    if (catchUpLineIndex < 0) return;
     navigateTimeline();
     void listRef.current?.scrollToIndex({
-      index,
+      index: catchUpLineIndex,
       animated: !opening && !prefersReducedMotion,
-      // The bar stays over the timeline when the thread opens; keep the line below it.
-      viewOffset: TIMELINE_MINIMAP_TARGET_OFFSET + (opening ? CATCH_UP_BAR_CLEARANCE : 0),
+      // The bar stays over the timeline until the reader reaches the end; keep the line below it.
+      viewOffset: TIMELINE_MINIMAP_TARGET_OFFSET + CATCH_UP_BAR_CLEARANCE,
     });
   });
   // A thread with unread messages opens at its "New" line, once, after the list first settles.
-  const opensAtCatchUp = timelineCatchUp !== null && citationRequest === null && !findActive;
-  const listSettled = settlingListIdentity === null;
+  const opensAtCatchUp =
+    (timelineCatchUp?.unreadCount ?? 0) > 0 &&
+    catchUpLineIndex >= 0 &&
+    citationRequest === null &&
+    !findActive;
+  const listSettled = settlingListIdentity === null && !restoringThreadPosition;
   // A cached transcript may still lack what came in since; decide once the thread caught up.
   const awaitingOpeningJump =
     listSettled && !syncing && !detailBehindShell && openedAtCatchUpFor !== listIdentityKey;
@@ -1439,6 +1504,13 @@ const ConversationTimeline = memo(function ConversationTimeline({
     const frame = requestAnimationFrame(() => setOpenedAtCatchUpFor(listIdentityKey));
     return () => cancelAnimationFrame(frame);
   }, [awaitingOpeningJump, opensAtCatchUp, listIdentityKey, jumpToCatchUp]);
+  const readerMeasurable = listSettled && openedAtCatchUpFor === listIdentityKey;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the list, outside React, once the opening scroll settled and when the New line moves, neither of which scrolls
+  useEffect(() => {
+    if (!readerMeasurable) return;
+    const frame = requestAnimationFrame(() => measureReader(catchUpLineRowId));
+    return () => cancelAnimationFrame(frame);
+  }, [readerMeasurable, catchUpLineRowId, measureReader]);
   const timelineListFooter = (
     <TimelineListFooter
       composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment}
@@ -1500,10 +1572,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
             className="relative h-full min-h-0"
             data-assistant-citation-viewport="true"
           >
-            {catchUpBoundary !== null && timelineCatchUp !== null ? (
+            {timelineCatchUp !== null && timelineCatchUp.unreadCount > 0 ? (
               <ThreadCatchUpBar
                 unreadCount={timelineCatchUp.unreadCount}
-                boundary={catchUpBoundary}
+                since={timelineCatchUp.unreadSince}
                 onJump={() => jumpToCatchUp(false)}
                 onMarkRead={reading.markRead}
               />

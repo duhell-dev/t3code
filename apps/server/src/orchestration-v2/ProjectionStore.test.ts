@@ -7884,7 +7884,7 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
     }),
   );
 
-  it.effect("counts the messages since the visit that the user did not write", () =>
+  it.effect("counts the messages since the visit or own message that the user did not write", () =>
     Effect.gen(function* () {
       const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
       const createdAt = yield* DateTime.now;
@@ -7963,6 +7963,15 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
         (yield* projectionStore.getShellSnapshot()).threads.find((row) => row.id === threadId)
           ?.unreadMessageCount,
         3,
+      );
+      // Writing in the thread reads everything before it, though the visit mark stays behind.
+      yield* message("own-follow-up", 16, "user", "user");
+      yield* message("answer-3", 17, "assistant", "agent");
+      assert.equal(yield* unread, 1);
+      assert.equal(
+        (yield* projectionStore.getShellSnapshot()).threads.find((row) => row.id === threadId)
+          ?.unreadMessageCount,
+        1,
       );
       yield* projectionStore.apply({
         id: EventId.make("event:projection-unread:visited"),

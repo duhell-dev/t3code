@@ -21,6 +21,7 @@ interface Shell {
   readonly lastVisitedAt?: string | null;
   readonly latestRun: { readonly completedAt: string | null } | null;
   readonly wokeAt?: string | null;
+  readonly unreadMessageCount?: number;
 }
 
 function at(seconds: number) {
@@ -355,6 +356,11 @@ it("sends the mark at once when the reader catches up, and keeps up while they f
   expect(t.visits.slice(1)).toEqual([{ threadId: t.ref.threadId, visitedAt: at(10) }]);
   t.update({ updatedAt: at(30), latestRun: { completedAt: at(30) } });
   expect(t.visits.slice(2)).toEqual([{ threadId: t.ref.threadId, visitedAt: at(30) }]);
+  // A message that lands mid-run counts on other devices until the mark passes it.
+  t.update({ updatedAt: at(31), latestRun: null, lastVisitedAt: at(30), unreadMessageCount: 1 });
+  expect(t.visits.slice(3)).toEqual([{ threadId: t.ref.threadId, visitedAt: at(31) }]);
+  t.update({ updatedAt: at(32), lastVisitedAt: at(31), unreadMessageCount: 0 });
+  expect(t.visits).toHaveLength(4);
 });
 
 it("marks read by hand while scrolled up, and leaves later arrivals unread", () => {

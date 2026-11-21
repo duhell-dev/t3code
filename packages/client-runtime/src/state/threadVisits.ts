@@ -22,6 +22,8 @@ interface VisitedShell {
   readonly updatedAt: string;
   readonly lastVisitedAt?: string | null | undefined;
   readonly latestRun: { readonly completedAt: string | null } | null;
+  /** Messages since the server's mark; other devices count them, so they are sent at once. */
+  readonly unreadMessageCount?: number | undefined;
   /**
    * When a scheduled wake the user is looking at took effect. A wake later
    * than `updatedAt` is an update the server never sent, so the watermark
@@ -220,6 +222,7 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
           readNow ||
           hasUnseenCompletion ||
           wakeIsLatest ||
+          (shell.unreadMessageCount ?? 0) > 0 ||
           elapsed >= VISIT_DISPATCH_THROTTLE_MS
         ) {
           dispatch(shell, visitedAt, false);

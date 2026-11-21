@@ -33,6 +33,9 @@ import { describe, expect, it, onTestFinished, vi } from "vite-plus/test";
 
 import "~/index.css";
 
+import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
+import { AppAtomRegistryProvider, appAtomRegistry } from "~/rpc/atomRegistry";
+import { threadReadingAtom } from "~/state/threadReading";
 import { environmentThreadDetails } from "../../state/threads";
 import { act, fakeTimers, render, stubGlobal } from "../../../test/render";
 import { ChangedFilesCard } from "./ChangedFilesTree";
@@ -92,6 +95,27 @@ vi.mock(import("~/assets/assetUrls"), async (original) => {
       stubbedAsset.url
         ? args[1].map(() => stubbedAsset.url)
         : actual.useAssetUrls(...args)) as typeof actual.useAssetUrls,
+  };
+});
+
+// Headless browsers report no window focus; catch-up tests say who is looking.
+const documentActivity = vi.hoisted(() => ({
+  override: null as { visible: boolean; focused: boolean } | null,
+  listeners: new Set<() => void>(),
+}));
+vi.mock(import("~/lib/documentActivity"), async (original) => {
+  const actual = await original();
+  return {
+    ...actual,
+    getDocumentActivity: () => documentActivity.override ?? actual.getDocumentActivity(),
+    subscribeDocumentActivity: (listener: () => void) => {
+      documentActivity.listeners.add(listener);
+      const stop = actual.subscribeDocumentActivity(listener);
+      return () => {
+        documentActivity.listeners.delete(listener);
+        stop();
+      };
+    },
   };
 });
 
@@ -223,6 +247,7 @@ async function click(element: HTMLElement) {
 }
 
 function setup({ scheduledTasks = [] as ReadonlyArray<{ id: string; title: string }> } = {}) {
+  documentActivity.override = null;
   environmentQuery.error = "Pull request not found";
   environmentQuery.data = { tasks: scheduledTasks };
 }
@@ -1211,6 +1236,141 @@ function usageLimitEntries(resetAt: string) {
     optimisticMessages: [],
   });
 }
+
+describe("MessagesTimeline catch-up", () => {
+  const minute = (value: number) => `2026-03-17T19:${String(value).padStart(2, "0")}:00.000Z`;
+  const said = (value: number, text: string, role: "user" | "assistant" = "assistant") => {
+    const entry = message(
+      text,
+      { role, createdAt: minute(value), updatedAt: minute(value) },
+      `m${value}`,
+    );
+    return { ...entry, createdAt: minute(value) } as Entry;
+  };
+  const long = (text: string) =>
+    `${text}\n\n${"A paragraph the reader has to scroll past.\n\n".repeat(30)}`;
+
+  function looking(activity: { visible: boolean; focused: boolean }) {
+    documentActivity.override = activity;
+    for (const listener of documentActivity.listeners) listener();
+  }
+  function setupCatchUp(activity = { visible: true, focused: true }) {
+    setup();
+    documentActivity.override = activity;
+    const props = baseProps();
+    const reading = () =>
+      appAtomRegistry.get(threadReadingAtom(parseScopedThreadKey(props.routeThreadKey)));
+    return { props, reading };
+  }
+  const bar = (screen: { container: HTMLElement }) =>
+    screen.container.querySelector<HTMLElement>('[role="status"]');
+  const line = (screen: { container: HTMLElement }) =>
+    screen.container.querySelector<HTMLElement>("[data-thread-catch-up-line]");
+  // Jumping releases follow, as ChatView's follow state does.
+  function Following(props: TimelineProps) {
+    const [follow, setFollow] = useState(true);
+    return (
+      <MessagesTimeline
+        {...props}
+        liveFollowEnabled={follow}
+        onViewportAttach={(viewport) =>
+          viewport.subscribe((navigation) => {
+            if (navigation.source === "command" && navigation.releasesFollow) setFollow(false);
+          })
+        }
+      />
+    );
+  }
+  const catchUpTimeline = (props: ReturnType<typeof baseProps>, entries: ReadonlyArray<Entry>) => (
+    <AppAtomRegistryProvider>
+      <Following {...props} timelineEntries={entries as Entry[]} catchUpBoundary={minute(10)} />
+    </AppAtomRegistryProvider>
+  );
+  const renderCatchUp = (props: ReturnType<typeof baseProps>, entries: ReadonlyArray<Entry>) =>
+    renderElement(catchUpTimeline(props, entries));
+
+  it("reads a thread shorter than the screen without a scroll, and keeps the line", async () => {
+    const { props, reading } = setupCatchUp();
+    await using screen = await renderCatchUp(props, [
+      said(5, "Seen"),
+      said(12, "New one"),
+      said(13, "New two"),
+    ]);
+    await vi.waitFor(() => {
+      expect(line(screen)).not.toBeNull();
+      expect(bar(screen)).toBeNull();
+      expect(reading()).toMatchObject({ caughtUp: true, unreadCount: 0 });
+    });
+  });
+
+  it("opens a long stretch at its line under the bar, and reads it on reaching the end", async () => {
+    const { props, reading } = setupCatchUp();
+    await using screen = await renderCatchUp(props, [
+      said(5, "Seen"),
+      said(12, long("First new")),
+      said(13, long("Second new")),
+    ]);
+    const viewport = props.listRef.current!.getScrollableNode()!;
+    await vi.waitFor(() => {
+      expect(bar(screen)?.textContent).toContain("2 new messages");
+      const lineTop = line(screen)!.getBoundingClientRect().top;
+      expect(lineTop).toBeGreaterThanOrEqual(bar(screen)!.getBoundingClientRect().bottom);
+      expect(lineTop - viewport.getBoundingClientRect().top).toBeLessThan(120);
+    });
+    expect(reading()).toMatchObject({ caughtUp: false, unreadCount: 2 });
+    await act(async () => viewport.scrollTo({ top: viewport.scrollHeight }));
+    await vi.waitFor(() => {
+      expect(bar(screen)).toBeNull();
+      // Rows measured late can grow the list past the end again; what was read stays read.
+      expect(reading().unreadCount).toBe(0);
+    });
+    expect(line(screen)).not.toBeNull();
+  });
+
+  it("reads an unfocused window while the reader uses its timeline, and not otherwise", async () => {
+    const { props, reading } = setupCatchUp({ visible: true, focused: false });
+    await using screen = await renderCatchUp(props, [said(5, "Seen"), said(12, "New one")]);
+    await vi.waitFor(() => expect(line(screen)).not.toBeNull());
+    expect(bar(screen)?.textContent).toContain("1 new message");
+    expect(reading()).toMatchObject({ caughtUp: false, unreadCount: 1 });
+    const viewport = props.listRef.current!.getScrollableNode()!;
+    await act(async () =>
+      viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, bubbles: true })),
+    );
+    await vi.waitFor(() => expect(reading()).toMatchObject({ caughtUp: true, unreadCount: 0 }));
+    expect(bar(screen)).toBeNull();
+  });
+
+  it("keeps what lands in a hidden tab unread, and reads it when the tab shows it again", async () => {
+    const { props, reading } = setupCatchUp();
+    const entries = [said(5, "Seen"), said(12, "New one")];
+    await using screen = await renderCatchUp(props, entries);
+    await vi.waitFor(() => expect(reading()).toMatchObject({ caughtUp: true }));
+    await act(async () => looking({ visible: false, focused: false }));
+    await screen.rerender(catchUpTimeline(props, [...entries, said(14, "Arrived while away")]));
+    await vi.waitFor(() => expect(reading()).toMatchObject({ caughtUp: false, unreadCount: 1 }));
+    await act(async () => looking({ visible: true, focused: true }));
+    await vi.waitFor(() => expect(reading()).toMatchObject({ caughtUp: true, unreadCount: 0 }));
+    // The line moved to what came in while away.
+    expect(
+      line(screen)?.parentElement?.querySelector('[data-timeline-row-id="entry-m14"]'),
+    ).not.toBeNull();
+  });
+
+  it("marks read by hand, taking the bar, the line and the count away", async () => {
+    const { props, reading } = setupCatchUp();
+    await using screen = await renderCatchUp(props, [
+      said(5, "Seen"),
+      said(12, long("First new")),
+      said(13, long("Second new")),
+    ]);
+    await vi.waitFor(() => expect(bar(screen)).not.toBeNull());
+    await click(screen.button("Mark as read"));
+    expect(bar(screen)).toBeNull();
+    expect(line(screen)).toBeNull();
+    expect(reading()).toMatchObject({ unreadCount: 0, markedRead: 1 });
+  });
+});
 
 describe("MessagesTimeline usage limit notice", () => {
   it("labels the retry time with the viewer's timezone", async () => {

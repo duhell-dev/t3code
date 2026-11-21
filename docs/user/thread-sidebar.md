@@ -252,9 +252,11 @@ A number next to a thread in the sidebar counts the messages its agents wrote si
 read it, and goes up while they keep working. Open the thread and it starts at a **New** line above
 the first of them, with a bar on top to jump back there or mark everything read.
 
-A thread counts as read once you stay at its end for a moment while the window has focus. New
-messages that arrive while you are there are read right away. Scroll up and they stay unread until
-you come back down.
+A thread counts as read as soon as you reach its end while you look at it: the window has focus,
+or you just scrolled it with the mouse wheel. The **New** line stays where it was until something new
+arrives while you are scrolled up or away; then it moves to the start of that. Messages that arrive
+while you stay at the end are read right away. Writing in the thread reads everything before your
+message.
 
 While a thread is idle, it collects finished delegated tasks for a quiet minute and a half, so
 one run answers several helpers instead of one run each. A message you send never waits. Change

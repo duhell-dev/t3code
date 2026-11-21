@@ -1990,7 +1990,11 @@ export function threadShellFromProjection(
     latestVisibleMessage: null,
     latestUserMessageAt: latestUserMessage?.updatedAt ?? null,
     latestUserAuthoredMessageAt,
-    unreadMessageCount: unreadMessageCount(projection.messages, projection.thread.lastVisitedAt),
+    unreadMessageCount: unreadMessageCount(
+      projection.messages,
+      projection.thread.lastVisitedAt,
+      latestUserAuthoredMessageAt,
+    ),
     hasActionableProposedPlan: projection.plans.some(
       (plan) => plan.kind === "proposed_plan" && plan.status === "active",
     ),
@@ -2239,15 +2243,24 @@ function visibleItemCountForShell(input: {
   );
 }
 
-/** Messages since the last visit that the user did not write, as the shell query counts them. */
+/**
+ * Messages the user did not write since the later of their last visit and their own last message,
+ * as the shell query counts them: writing in a thread reads everything before it.
+ */
 function unreadMessageCount(
   messages: ReadonlyArray<OrchestrationV2ConversationMessage>,
   lastVisitedAt: DateTime.Utc | null,
+  latestUserAuthoredMessageAt: DateTime.Utc | null,
 ): number {
   if (lastVisitedAt === null) return 0;
+  const readUntil =
+    latestUserAuthoredMessageAt !== null &&
+    DateTime.isGreaterThan(latestUserAuthoredMessageAt, lastVisitedAt)
+      ? latestUserAuthoredMessageAt
+      : lastVisitedAt;
   return messages.filter(
     (message) =>
-      DateTime.isGreaterThan(message.createdAt, lastVisitedAt) &&
+      DateTime.isGreaterThan(message.createdAt, readUntil) &&
       (message.role === "assistant" ||
         (message.role === "user" &&
           message.createdBy !== "user" &&
@@ -8590,6 +8603,15 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 FROM orchestration_v2_projection_messages message
                 WHERE message.thread_id = t.thread_id
                   AND message.created_at > json_extract(t.payload_json, '$.lastVisitedAt')
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM orchestration_v2_projection_messages authored
+                    WHERE authored.thread_id = t.thread_id
+                      AND authored.role = 'user'
+                      AND json_extract(authored.payload_json, '$.createdBy') = 'user'
+                      AND NOT ${isIdleCompactionMessage("authored")}
+                      AND authored.updated_at >= message.created_at
+                  )
                   AND (
                     message.role = 'assistant'
                     OR (

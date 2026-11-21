@@ -7,14 +7,14 @@ function clockTime(iso: string): string {
 /** Over the timeline, in the banners' lane, while unread messages are left. */
 export function ThreadCatchUpBar(props: {
   readonly unreadCount: number;
-  readonly boundary: string;
+  readonly since: string;
   readonly onJump: () => void;
   readonly onMarkRead: () => void;
 }) {
   const gt = useGT();
   const summary = gt(
     "{count, plural, one {{count} new message since {time}} other {{count} new messages since {time}}}",
-    { count: props.unreadCount, time: clockTime(props.boundary) },
+    { count: props.unreadCount, time: clockTime(props.since) },
   );
   return (
     <div className="chat-banner-lane pointer-events-none absolute top-0 z-30 flex justify-center px-3 pt-2">
@@ -45,7 +45,7 @@ export function ThreadCatchUpBar(props: {
 }
 
 /** Above the first message the reader has not seen. */
-export function ThreadCatchUpLine(props: { readonly boundary: string }) {
+export function ThreadCatchUpLine(props: { readonly since: string }) {
   const gt = useGT();
   return (
     <div
@@ -53,9 +53,7 @@ export function ThreadCatchUpLine(props: { readonly boundary: string }) {
       data-thread-catch-up-line="true"
     >
       <span aria-hidden="true" className="h-px flex-1 bg-destructive" />
-      <span className="shrink-0">
-        {gt("New · since {time}", { time: clockTime(props.boundary) })}
-      </span>
+      <span className="shrink-0">{gt("New · since {time}", { time: clockTime(props.since) })}</span>
       <span aria-hidden="true" className="h-px flex-1 bg-destructive" />
     </div>
   );
