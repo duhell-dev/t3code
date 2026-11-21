@@ -52,4 +52,20 @@ that served the page all offer it. A failed read leaves the target at the client
 the server that served the page runs a newer build, the page reloads into it after any update run
 there has finished, once per build. The desktop app keeps using its own updater.
 
+## Joining a group of environments
+
+Three pieces let a device reach every environment of a group without pairing codes:
+
+- **Sign in with Tailscale.** A server started with `T3CODE_TAILSCALE_SIGN_IN_LOGINS` (comma-separated
+  Tailscale logins) offers this on its pairing page. Behind Tailscale Serve it checks the device with
+  `tailscale whois`: an untagged node of an allowed login gets a one-minute pairing for that browser.
+  The server's own node is always refused, since every local process reaches Serve from it; more
+  nodes can be refused with `T3CODE_TAILSCALE_SIGN_IN_REFUSE_NODES`.
+- **Device join.** The server setting `deviceJoinEnvironmentIds` lists linked environments a device
+  signed in to this server joins by itself, each paired over this server's full-access link
+  (`apps/web/src/state/deviceJoin.ts`). Only listed environments are joined, whatever else the
+  server links to. An environment the user removes from a device is not joined again.
+- **Browser sessions renew.** A browser cookie session moves 30 days out when the page checks its
+  session, at most once a day, like a peer link in use. Revoking it still ends it.
+
 Operating notes are kept outside this repository.
