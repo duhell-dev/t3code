@@ -103,8 +103,8 @@ import { cn } from "~/lib/utils";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { type HandoffTimelineRun } from "./V2LifecycleRow";
 import { TimelineSystemDivider } from "./TimelineSystemDivider";
-import { ThreadCatchUpBar, ThreadCatchUpMarker } from "./ThreadCatchUp";
-import { deriveTimelineCatchUp, type ThreadCatchUpWindow } from "./threadCatchUp.logic";
+import { ThreadCatchUpBar, ThreadCatchUpLine } from "./ThreadCatchUp";
+import { useTimelineReading } from "./useTimelineReading";
 
 import { forwardWheelToTimeline } from "./timelineMinimapWheel";
 import { TimelineMinimap } from "./TimelineMinimap";
@@ -336,15 +336,8 @@ interface MessagesTimelineProps {
   findQuery?: string;
   activeFindMatch?: ThreadFindMatch | null;
   findNavigationId?: number;
-  /** What the reader missed since their last visit; see resolveCatchUpWindow. */
-  catchUp?: {
-    readonly environmentId: EnvironmentId;
-    readonly threadId: ThreadId;
-    readonly window: ThreadCatchUpWindow;
-    readonly barVisible: boolean;
-    readonly onMarkRead: () => void;
-    readonly onJumped: () => void;
-  } | null;
+  /** Where unread messages start for the reader, frozen when the thread opened; see useThreadCatchUp. */
+  catchUpBoundary?: string | null;
 }
 
 export function MessagesTimeline(props: MessagesTimelineProps) {
@@ -438,7 +431,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   emptyPlaceholderInset,
   topFadeEnabled = false,
   historyControls,
-  catchUp = null,
+  catchUpBoundary = null,
 }: MessagesTimelineProps) {
   const gt = useGT();
   const listIdentityKey = displayThreadKey ?? routeThreadKey;
@@ -777,8 +770,17 @@ const ConversationTimeline = memo(function ConversationTimeline({
     revealedMessageId,
   });
   const rows = useStableRows(rawRows, listIdentityKey);
-  const timelineCatchUp =
-    catchUp === null ? null : deriveTimelineCatchUp(rows, timelineEntries, catchUp.window);
+  // The reader is at the end once the opening scroll, and the jump to the "New" line, are done.
+  const [readerAtEnd, setReaderAtEnd] = useState(false);
+  const [openedAtCatchUpFor, setOpenedAtCatchUpFor] = useState<string | null>(null);
+  const reading = useTimelineReading({
+    identity: listIdentityKey,
+    boundary: catchUpBoundary,
+    atEnd: readerAtEnd && settlingListIdentity === null && openedAtCatchUpFor === listIdentityKey,
+    rows,
+    entries: timelineEntries,
+  });
+  const timelineCatchUp = reading.catchUp;
   const matchedApprovalRequestIds = new Set<string>();
   for (const row of pendingApprovalRequestIds.size > 0 ? rows : []) {
     const entries =
@@ -1059,6 +1061,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
     const isAtEnd = rememberPosition(liveFollowEnabled && !anchoredEndSpace);
     if (isAtEnd !== undefined && !citationPositioning) {
       onIsAtEndChange(isAtEnd);
+      // Following the end counts too, so a growing streamed row does not read as a scroll away.
+      setReaderAtEnd(isAtEnd || listRef.current?.getState?.().isFollowingEnd === true);
     }
     scheduleMinimapRefresh();
   };
@@ -1393,13 +1397,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
           className="chat-content-lane overflow-x-clip"
           data-timeline-root="true"
         >
-          {catchUp !== null && timelineCatchUp?.rowId === item.id ? (
-            <ThreadCatchUpMarker
-              environmentId={catchUp.environmentId}
-              threadId={catchUp.threadId}
-              window={catchUp.window}
-              answerCount={timelineCatchUp.answerCount}
-            />
+          {catchUpBoundary !== null && timelineCatchUp?.rowId === item.id ? (
+            <ThreadCatchUpLine boundary={catchUpBoundary} />
           ) : null}
           <AudioPreviewUnmountContext value={onAudioUnmount}>
             <TimelineRowContent row={item} />
@@ -1424,21 +1423,22 @@ const ConversationTimeline = memo(function ConversationTimeline({
       // The bar stays over the timeline when the thread opens; keep the line below it.
       viewOffset: TIMELINE_MINIMAP_TARGET_OFFSET + (opening ? CATCH_UP_BAR_CLEARANCE : 0),
     });
-    if (!opening) catchUp?.onJumped();
   });
-  // A thread with missed answers opens at its "New" line, once, after the list first settles.
-  const catchUpOpenedForRef = useRef<string | null>(null);
-  const opensAtCatchUp =
-    timelineCatchUp !== null &&
-    settlingListIdentity === null &&
-    citationRequest === null &&
-    !findActive;
+  // A thread with unread messages opens at its "New" line, once, after the list first settles.
+  const opensAtCatchUp = timelineCatchUp !== null && citationRequest === null && !findActive;
+  const listSettled = settlingListIdentity === null;
+  // A cached transcript may still lack what came in since; decide once the thread caught up.
+  const awaitingOpeningJump =
+    listSettled && !syncing && !detailBehindShell && openedAtCatchUpFor !== listIdentityKey;
+  if (awaitingOpeningJump && !opensAtCatchUp) setOpenedAtCatchUpFor(listIdentityKey);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- scrolls the list, outside React, to the "New" line when a thread opens
   useEffect(() => {
-    if (!opensAtCatchUp || catchUpOpenedForRef.current === listIdentityKey) return;
-    catchUpOpenedForRef.current = listIdentityKey;
+    if (!awaitingOpeningJump || !opensAtCatchUp) return;
     jumpToCatchUp(true);
-  }, [opensAtCatchUp, listIdentityKey, jumpToCatchUp]);
+    // Reading starts once the jump has moved the list, not at the end it opened on.
+    const frame = requestAnimationFrame(() => setOpenedAtCatchUpFor(listIdentityKey));
+    return () => cancelAnimationFrame(frame);
+  }, [awaitingOpeningJump, opensAtCatchUp, listIdentityKey, jumpToCatchUp]);
   const timelineListFooter = (
     <TimelineListFooter
       composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment}
@@ -1500,12 +1500,12 @@ const ConversationTimeline = memo(function ConversationTimeline({
             className="relative h-full min-h-0"
             data-assistant-citation-viewport="true"
           >
-            {catchUp?.barVisible && timelineCatchUp !== null ? (
+            {catchUpBoundary !== null && timelineCatchUp !== null ? (
               <ThreadCatchUpBar
-                answerCount={timelineCatchUp.answerCount}
-                boundary={catchUp.window.boundary}
+                unreadCount={timelineCatchUp.unreadCount}
+                boundary={catchUpBoundary}
                 onJump={() => jumpToCatchUp(false)}
-                onMarkRead={catchUp.onMarkRead}
+                onMarkRead={reading.markRead}
               />
             ) : null}
             {onCiteAssistantText && citationThreadRef ? (

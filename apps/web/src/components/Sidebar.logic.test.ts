@@ -13,6 +13,7 @@ import {
   getFallbackThreadIdAfterDelete,
   hasUnseenCompletion,
   sidebarUnreadCount,
+  foldedUnreadCount,
   orderItemsByPreferredIds,
   pinOrderKeyBetween,
   resolveSidebarSweepKeys,
@@ -1797,5 +1798,19 @@ describe("resolveScopedNewThreadProjectRef", () => {
         viewed: viewedWeb,
       }),
     ).toBeNull();
+  });
+});
+
+describe("foldedUnreadCount", () => {
+  const thread = (id: string, unreadMessageCount: number) => ({
+    id,
+    unreadMessageCount,
+    updatedAt: "2026-01-01T12:00:00.000Z",
+    lastVisitedAt: "2026-01-01T10:00:00.000Z",
+  });
+  it("adds up the unread messages of the threads a folded shelf hides", () => {
+    const working = [thread("a", 3), thread("b", 2), thread("open", 5)];
+    expect(foldedUnreadCount(working, [working[2]!])).toBe(5);
+    expect(foldedUnreadCount(working, working)).toBe(0);
   });
 });

@@ -1,3 +1,5 @@
+import { useGT } from "gt-react";
+import { Badge } from "../ui/badge";
 import { CollapsibleSectionHeader } from "../ui/collapsible-section-header";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -115,11 +117,14 @@ export function SidebarSectionHeader(props: {
   label: string;
   /** A muted trailing count. */
   count: number;
+  /** Unread messages in the threads the folded shelf hides. */
+  unreadCount?: number;
   className?: string;
   dragging?: boolean;
   isDropTarget?: boolean;
   toggle: { expanded: boolean; onToggle: () => void };
 }) {
+  const gt = useGT();
   const shelf =
     props.marker === "working-header"
       ? "working"
@@ -138,7 +143,23 @@ export function SidebarSectionHeader(props: {
         expanded={props.toggle.expanded}
         tone={props.isDropTarget ? "accent" : props.dragging ? "emphasized" : "muted"}
         data-testid={`sidebar-${shelf}-shelf-toggle`}
-        accessory={<span className="font-normal tabular-nums">{props.count}</span>}
+        accessory={
+          <span className="flex items-center gap-1.5">
+            {props.unreadCount ? (
+              <Badge
+                variant="error"
+                size="sm"
+                aria-label={gt(
+                  "{count, plural, one {{count} new message} other {{count} new messages}}",
+                  { count: props.unreadCount },
+                )}
+              >
+                {props.unreadCount > 99 ? "99+" : props.unreadCount}
+              </Badge>
+            ) : null}
+            <span className="font-normal tabular-nums">{props.count}</span>
+          </span>
+        }
       >
         {props.label}
       </CollapsibleSectionHeader>

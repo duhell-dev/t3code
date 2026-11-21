@@ -44,6 +44,17 @@ export interface ThreadVisitTrackerOptions {
    * that keeps its own watermark for them records the visit here instead.
    */
   readonly markLocalVisit?: (ref: ScopedThreadRef, visitedAt: string) => void;
+  /**
+   * Whether the reader has caught up with the thread. Without it, showing the thread reads it.
+   * While they have not, opens are still recorded but the visit mark stays where it was.
+   */
+  readonly readingAtom?: (ref: ScopedThreadRef) => Atom.Atom<ThreadReading>;
+}
+
+export interface ThreadReading {
+  readonly caughtUp: boolean;
+  /** Moves each time the reader marks the thread read by hand. */
+  readonly markedRead: number;
 }
 
 /**
@@ -71,6 +82,10 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
       let lastDispatchGeneration = registry.get(sessionGenerationAtom);
       let active = true;
       let lastDispatchAt = 0;
+      const readingAtom = options.readingAtom?.(ref);
+      let lastMarkedRead = readingAtom === undefined ? 0 : registry.get(readingAtom).markedRead;
+      // Catching up or marking read sends the mark at once instead of after the throttle.
+      let readNow = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
       const clearTimer = () => {
         if (timer === undefined) return;
@@ -92,6 +107,7 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
       const dispatch = (shell: VisitedShell, visitedAt: string, opened: boolean) => {
         clearTimer();
         retryPending = false;
+        readNow = false;
         lastDispatchedUpdatedAt = visitedAt;
         lastDispatchAt = Date.now();
         lastDispatchGeneration = registry.get(sessionGenerationAtom);
@@ -160,6 +176,18 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
           );
           return;
         }
+        const reading = readingAtom === undefined ? undefined : registry.get(readingAtom);
+        // A thread never visited has no mark to hold, so showing it reads it as before.
+        const holdsMark =
+          reading !== undefined && !reading.caughtUp && !readNow && Boolean(shell.lastVisitedAt);
+        if (holdsMark) {
+          // The server only moves a mark forward, so the open rides on the mark it already has.
+          if (openPending && shell.lastVisitedAt) {
+            openPending = false;
+            dispatch(shell, shell.lastVisitedAt, true);
+          }
+          return;
+        }
         // The open rides on the first visit the server hears, however late
         // the shell arrives, so it still counts toward search ranking.
         if (openPending) {
@@ -169,6 +197,7 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
         }
         const lastVisitedAtMs = shell.lastVisitedAt ? Date.parse(shell.lastVisitedAt) : NaN;
         if (!Number.isNaN(lastVisitedAtMs) && lastVisitedAtMs >= updatedAtMs) {
+          readNow = false;
           // Already seen, so a later mark-unread stays sticky even when no open was sent.
           if (lastDispatchedUpdatedAt === null || Date.parse(lastDispatchedUpdatedAt) < updatedAtMs)
             lastDispatchedUpdatedAt = visitedAt;
@@ -187,7 +216,12 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
         const hasUnseenCompletion =
           !Number.isNaN(completedAtMs) &&
           (Number.isNaN(lastVisitedAtMs) || completedAtMs > lastVisitedAtMs);
-        if (hasUnseenCompletion || wakeIsLatest || elapsed >= VISIT_DISPATCH_THROTTLE_MS) {
+        if (
+          readNow ||
+          hasUnseenCompletion ||
+          wakeIsLatest ||
+          elapsed >= VISIT_DISPATCH_THROTTLE_MS
+        ) {
           dispatch(shell, visitedAt, false);
           return;
         }
@@ -203,6 +237,15 @@ export function createThreadVisitTracker(options: ThreadVisitTrackerOptions) {
       get.subscribe(sessionGenerationAtom, () =>
         onShell(registry.get(options.threadShellAtom(ref))),
       );
+      if (readingAtom !== undefined) {
+        get.subscribe(readingAtom, (next) => {
+          const marked = next.markedRead !== lastMarkedRead;
+          lastMarkedRead = next.markedRead;
+          if (!next.caughtUp && !marked) return;
+          readNow = true;
+          onShell(registry.get(options.threadShellAtom(ref)));
+        });
+      }
     }).pipe(Atom.withLabel(`thread-visit-tracker:${key}`));
   });
   return (ref: ScopedThreadRef | null) => (ref === null ? IDLE_TRACKER : family(threadKey(ref)));

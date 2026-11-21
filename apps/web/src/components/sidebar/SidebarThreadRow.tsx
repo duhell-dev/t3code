@@ -1,4 +1,4 @@
-import { useAtomMount } from "@effect/atom-react";
+import { useAtomMount, useAtomValue } from "@effect/atom-react";
 import { asLaunchingThread } from "@t3tools/client-runtime/state/thread-inbox";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "../ThreadHoverCard";
 import { ThreadTerminalStatusButton } from "../ThreadStatusIndicators";
@@ -83,6 +83,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { formatRelativeTime, parseTimestampDate } from "../../timestampFormat";
 import { Badge } from "../ui/badge";
+import { threadReadingAtom } from "../../state/threadReading";
 import type { SidebarThreadSummary } from "../../types";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { cn } from "~/lib/utils";
@@ -768,15 +769,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     : null;
 
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
+  // The open thread counts what its reader has not reached yet, and drops to 0 as they do.
+  const openThreadReading = useAtomValue(threadReadingAtom(props.isActive ? threadRef : null));
   const unreadCount = props.isActive
-    ? 0
+    ? openThreadReading.unreadCount
     : sidebarUnreadCount({ ...thread, lastVisitedAt, serverLastVisitedAt: thread.lastVisitedAt });
   const unreadBadge =
     unreadCount > 0 ? (
       <Badge
         variant="error"
         size="sm"
-        aria-label={gt("{count, plural, one {{count} new answer} other {{count} new answers}}", {
+        aria-label={gt("{count, plural, one {{count} new message} other {{count} new messages}}", {
           count: unreadCount,
         })}
       >

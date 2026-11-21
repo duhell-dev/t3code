@@ -7837,6 +7837,97 @@ it.layer(layerTest)("ProjectionStoreV2", (it) => {
     }),
   );
 
+  it.effect("counts the messages since the visit that the user did not write", () =>
+    Effect.gen(function* () {
+      const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+      const createdAt = yield* DateTime.now;
+      const at = (seconds: number) => DateTime.add(createdAt, { seconds });
+      const threadId = ThreadId.make("thread:projection-unread");
+      const thread = {
+        createdBy: "user" as const,
+        creationSource: "web" as const,
+        id: threadId,
+        projectId: ProjectId.make("project:projection-unread"),
+        title: "Projection unread",
+        providerInstanceId,
+        modelSelection,
+        runtimeMode: "full-access" as const,
+        interactionMode: "default" as const,
+        branch: null,
+        worktreePath: null,
+        activeProviderThreadId: null,
+        lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+        forkedFrom: null,
+        createdAt,
+        updatedAt: createdAt,
+        archivedAt: null,
+        settledOverride: null,
+        settledAt: null,
+        lastVisitedAt: at(10),
+        deletedAt: null,
+      };
+      yield* projectionStore.apply({
+        id: EventId.make("event:projection-unread:created"),
+        type: "thread.created",
+        threadId,
+        occurredAt: createdAt,
+        payload: thread,
+      });
+      const message = (
+        id: string,
+        seconds: number,
+        role: "user" | "assistant",
+        createdBy: "user" | "agent",
+        text = id,
+      ) =>
+        projectionStore.apply({
+          id: EventId.make(`event:projection-unread:${id}`),
+          type: "message.updated",
+          threadId,
+          occurredAt: at(seconds),
+          payload: {
+            id: MessageId.make(`message:projection-unread:${id}`),
+            threadId,
+            runId: RunId.make("run:projection-unread"),
+            nodeId: null,
+            role,
+            text,
+            attachments: [],
+            streaming: false,
+            createdBy,
+            creationSource: createdBy === "user" ? "web" : "server",
+            createdAt: at(seconds),
+            updatedAt: at(seconds),
+          },
+        });
+      const unread = Effect.map(
+        projectionStore.getThreadShell(threadId),
+        (shell) => shell?.unreadMessageCount,
+      );
+      yield* message("seen", 5, "assistant", "agent");
+      yield* message("own-prompt", 11, "user", "user");
+      yield* message("answer-1", 12, "assistant", "agent");
+      // Each streamed text of one run counts, so the number moves while the agent works.
+      yield* message("answer-2", 13, "assistant", "agent");
+      yield* message("helper-wake", 14, "user", "agent");
+      yield* message("compaction", 15, "user", "agent", "/compact");
+      assert.equal(yield* unread, 3);
+      assert.equal(
+        (yield* projectionStore.getShellSnapshot()).threads.find((row) => row.id === threadId)
+          ?.unreadMessageCount,
+        3,
+      );
+      yield* projectionStore.apply({
+        id: EventId.make("event:projection-unread:visited"),
+        type: "thread.visited",
+        threadId,
+        occurredAt: at(20),
+        payload: { ...thread, lastVisitedAt: at(20) },
+      });
+      assert.equal(yield* unread, 0);
+    }),
+  );
+
   it.effect("dates thread activity by a run event and leaves the rest of the thread alone", () =>
     Effect.gen(function* () {
       const projectionStore = yield* ProjectionStore.ProjectionStoreV2;

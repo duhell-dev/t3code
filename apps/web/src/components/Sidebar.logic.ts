@@ -784,8 +784,8 @@ export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
 }
 
 /**
- * New answers to show on a row. The server counts against its own visit mark; a newer
- * local mark, or one past the thread's last change, means they were read since.
+ * Unread messages to show on a row that is not open. The server counts against its own visit
+ * mark; a newer local mark, or one past the thread's last change, means they were read since.
  */
 export function sidebarUnreadCount(thread: {
   readonly unreadMessageCount?: number | undefined;
@@ -799,6 +799,19 @@ export function sidebarUnreadCount(thread: {
   if (visitedAt >= Date.parse(thread.updatedAt)) return 0;
   const serverVisitedAt = thread.serverLastVisitedAt ? Date.parse(thread.serverLastVisitedAt) : NaN;
   return Number.isNaN(serverVisitedAt) || visitedAt <= serverVisitedAt ? count : 0;
+}
+
+/** Unread messages of the threads a folded shelf hides, so the fold still shows that news came in. */
+export function foldedUnreadCount(
+  threads: ReadonlyArray<Parameters<typeof sidebarUnreadCount>[0] & { readonly id: string }>,
+  shown: ReadonlyArray<{ readonly id: string }>,
+): number {
+  const shownIds = new Set(shown.map((thread) => thread.id));
+  let total = 0;
+  for (const thread of threads) {
+    if (!shownIds.has(thread.id)) total += sidebarUnreadCount(thread);
+  }
+  return total;
 }
 
 // Suppress trailing double-click navigation; keyboard and synthetic clicks use detail 0.

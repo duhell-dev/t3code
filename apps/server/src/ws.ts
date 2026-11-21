@@ -59,7 +59,6 @@ import {
   OrchestrationV2SearchThreadError,
   OrchestrationGetTurnDiffError,
   ORCHESTRATION_V2_WS_METHODS,
-  THREAD_CATCH_UP_WS_METHOD,
   ORCHESTRATION_PROTOCOL_QUERY_PARAM,
   CLIENT_CAPABILITIES_QUERY_PARAM,
   SETTINGS_SECRET_REFERENCES_CAPABILITY,
@@ -177,7 +176,6 @@ import {
 } from "./orchestration-v2/WireProjection.ts";
 import { dedupeSnapshotBodies } from "@t3tools/shared/orchestrationV2DedupedBodies";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
-import * as ThreadCatchUp from "./orchestration-v2/ThreadCatchUp.ts";
 import * as ThreadSearch from "./orchestration-v2/ThreadSearch.ts";
 import * as OrchestrationEventStore from "./persistence/OrchestrationEventStore.ts";
 import { userFacingDispatchErrorMessage } from "./orchestration-v2/UserFacingErrors.ts";
@@ -1462,7 +1460,6 @@ export const layerWsRpc = (
       const scratchThreadPromotion = yield* ScratchThreadPromotion.ScratchThreadPromotion;
       const eventLoopMonitor = yield* EventLoopMonitor.EventLoopMonitor;
       const threadSearch = yield* ThreadSearch.ThreadSearch;
-      const threadCatchUp = yield* ThreadCatchUp.ThreadCatchUp;
 
       const providerSessionsV2 = yield* ProviderSessionManager.ProviderSessionManagerV2;
       const mcpAppRequests = yield* McpAppRequests.McpAppRequests;
@@ -2098,7 +2095,6 @@ export const layerWsRpc = (
           threadManagement
             .searchThread(input)
             .pipe(Effect.mapError((cause) => new OrchestrationV2SearchThreadError({ cause }))),
-        [THREAD_CATCH_UP_WS_METHOD]: (input) => threadCatchUp.getCatchUp(input),
         [ORCHESTRATION_V2_WS_METHODS.searchThreadStream]: (input) =>
           threadManagement
             .searchThreadStream(input)

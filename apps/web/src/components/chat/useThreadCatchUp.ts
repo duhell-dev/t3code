@@ -1,42 +1,27 @@
-import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useState } from "react";
 
-import { resolveCatchUpWindow, type ThreadCatchUpWindow } from "./threadCatchUp.logic";
+import { laterOf } from "./threadCatchUp.logic";
 
 /**
- * Freezes what the reader missed when a thread opens, before the visit mark moves past it.
- * Marking read ends it; a prompt sent from here does too, since it starts a new stretch.
+ * Where unread messages start for the reader: the visit mark as it was when the thread opened,
+ * before reading moves it, or their own later message. Null for a thread never visited.
  */
-export function useThreadCatchUp(input: {
+export function useThreadCatchUpBoundary(input: {
   readonly threadKey: string;
-  readonly environmentId: EnvironmentId;
-  readonly threadId: ThreadId;
   readonly shell: {
     readonly lastVisitedAt?: string | null | undefined;
     readonly latestUserAuthoredMessageAt?: string | null | undefined;
-    readonly updatedAt: string;
   } | null;
-}) {
-  const [state, setState] = useState<{
-    readonly key: string | null;
-    readonly window: ThreadCatchUpWindow | null;
-    readonly barVisible: boolean;
-  }>({ key: null, window: null, barVisible: false });
-  let current = state;
-  if (input.shell !== null && state.key !== input.threadKey) {
-    const window = resolveCatchUpWindow(input.shell);
-    current = { key: input.threadKey, window, barVisible: window !== null };
-    setState(current);
+}): string | null {
+  const [opened, setOpened] = useState<{ key: string | null; mark: string | null }>({
+    key: null,
+    mark: null,
+  });
+  let current = opened;
+  if (input.shell !== null && opened.key !== input.threadKey) {
+    current = { key: input.threadKey, mark: input.shell.lastVisitedAt ?? null };
+    setOpened(current);
   }
-  if (current.key !== input.threadKey || current.window === null) return null;
-  const ownPromptAt = input.shell?.latestUserAuthoredMessageAt;
-  if (ownPromptAt && Date.parse(ownPromptAt) > Date.parse(current.window.boundary)) return null;
-  return {
-    environmentId: input.environmentId,
-    threadId: input.threadId,
-    window: current.window,
-    barVisible: current.barVisible,
-    onMarkRead: () => setState((previous) => ({ ...previous, window: null, barVisible: false })),
-    onJumped: () => setState((previous) => ({ ...previous, barVisible: false })),
-  };
+  if (current.key !== input.threadKey || current.mark === null) return null;
+  return laterOf(current.mark, input.shell?.latestUserAuthoredMessageAt);
 }

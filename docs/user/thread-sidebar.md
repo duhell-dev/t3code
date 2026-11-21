@@ -248,13 +248,13 @@ thread** from its long-press menu on mobile.
 
 ## Catch up on a thread
 
-A number next to a thread in the sidebar counts the answers its agents wrote since you last
-looked. Open the thread and it starts at a **New** line above the first of them, with a bar on top
-to jump back there or mark everything read.
+A number next to a thread in the sidebar counts the messages its agents wrote since you last
+read it, and goes up while they keep working. Open the thread and it starts at a **New** line above
+the first of them, with a bar on top to jump back there or mark everything read.
 
-When enough happened, a **Since your last visit** box above the line sums it up in a few lines,
-with what waits on you first. The text generation model writes it when you open the thread, so a
-thread you never open costs nothing. Fold the box to read the messages themselves.
+A thread counts as read once you stay at its end for a moment while the window has focus. New
+messages that arrive while you are there are read right away. Scroll up and they stay unread until
+you come back down.
 
 While a thread is idle, it collects finished delegated tasks for a quiet minute and a half, so
 one run answers several helpers instead of one run each. A message you send never waits. Change

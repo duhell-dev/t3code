@@ -2229,18 +2229,20 @@ function visibleItemCountForShell(input: {
   );
 }
 
-/** Answers since the last visit: one per run with assistant text, as the shell query counts them. */
+/** Messages since the last visit that the user did not write, as the shell query counts them. */
 function unreadMessageCount(
   messages: ReadonlyArray<OrchestrationV2ConversationMessage>,
   lastVisitedAt: DateTime.Utc | null,
 ): number {
   if (lastVisitedAt === null) return 0;
-  const answers = new Set<string>();
-  for (const message of messages) {
-    if (message.role === "assistant" && DateTime.isGreaterThan(message.createdAt, lastVisitedAt))
-      answers.add(message.runId ?? message.id);
-  }
-  return answers.size;
+  return messages.filter(
+    (message) =>
+      DateTime.isGreaterThan(message.createdAt, lastVisitedAt) &&
+      (message.role === "assistant" ||
+        (message.role === "user" &&
+          message.createdBy !== "user" &&
+          idleCompactionOf(message) === undefined)),
+  ).length;
 }
 
 function shellFromState(input: {
@@ -8378,10 +8380,13 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         threadIds,
         listedOnly = false,
         includeDeleted = false,
+        countsUnread = true,
       }: ShellSnapshotOptions & {
         readonly listedOnly?: boolean;
         // A retained fork still shows the history of a deleted source run.
         readonly includeDeleted?: boolean;
+        // Agent awareness reads no message history; only the sidebar's count does.
+        readonly countsUnread?: boolean;
       } = {},
     ) =>
       sql<ShellThreadRow>`
@@ -8527,13 +8532,24 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ORDER BY message.updated_at DESC, message.message_id DESC
                 LIMIT 1
               ) AS latest_user_authored_message_at,
-              (
-                SELECT COUNT(DISTINCT COALESCE(message.run_id, message.message_id))
+              ${
+                countsUnread
+                  ? sql`(
+                SELECT COUNT(*)
                 FROM orchestration_v2_projection_messages message
                 WHERE message.thread_id = t.thread_id
-                  AND message.role = 'assistant'
                   AND message.created_at > json_extract(t.payload_json, '$.lastVisitedAt')
-              ) AS unread_message_count,
+                  AND (
+                    message.role = 'assistant'
+                    OR (
+                      message.role = 'user'
+                      AND json_extract(message.payload_json, '$.createdBy') IS NOT 'user'
+                      AND NOT ${isIdleCompactionMessage("message")}
+                    )
+                  )
+              ) AS unread_message_count`
+                  : sql`0 AS unread_message_count`
+              },
               EXISTS (
                 SELECT 1
                 FROM orchestration_v2_projection_plans plan
@@ -9383,7 +9399,9 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             Effect.gen(function* () {
               const threadRows = yield* selectShellThreadRows(
                 threadId,
-                threadId === undefined ? { location: "active", listedOnly: true } : {},
+                threadId === undefined
+                  ? { location: "active", listedOnly: true, countsUnread: false }
+                  : { countsUnread: false },
               );
               const ids = threadRows.map((row) => ThreadId.make(row.thread_id));
               const providerThreadRows =

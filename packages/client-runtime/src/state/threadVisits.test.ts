@@ -6,7 +6,11 @@ import { expect, it, vi } from "vite-plus/test";
 
 import type { VisitThreadInput } from "../operations/commands.ts";
 import { claimThreadOpen } from "./threadSearch.ts";
-import { createThreadVisitTracker, VISIT_DISPATCH_THROTTLE_MS } from "./threadVisits.ts";
+import {
+  createThreadVisitTracker,
+  type ThreadReading,
+  VISIT_DISPATCH_THROTTLE_MS,
+} from "./threadVisits.ts";
 
 const environmentId = EnvironmentId.make("env-visits");
 
@@ -24,7 +28,11 @@ function at(seconds: number) {
 }
 
 // claimThreadOpen dedupes per thread in module state, so each test opens its own thread.
-function setup(threadName: string, initial: Omit<Shell, "environmentId" | "id"> | null) {
+function setup(
+  threadName: string,
+  initial: Omit<Shell, "environmentId" | "id"> | null,
+  options: { readonly tracksReading?: boolean } = {},
+) {
   vi.useFakeTimers({ now: Date.UTC(2026, 0, 1) });
   const threadId = ThreadId.make(threadName);
   const ref = { environmentId, threadId };
@@ -38,7 +46,9 @@ function setup(threadName: string, initial: Omit<Shell, "environmentId" | "id"> 
   let pendingResult: Effect.Effect<void, string> | undefined;
   const attempts: Array<VisitThreadInput> = [];
   const sessionGenerationAtom = Atom.make(1);
+  const readingAtom = Atom.make<ThreadReading>({ caughtUp: false, markedRead: 0 });
   const tracker = createThreadVisitTracker({
+    ...(options.tracksReading ? { readingAtom: () => readingAtom } : {}),
     threadShellAtom: () => shellAtom,
     sessionGenerationAtom: () => sessionGenerationAtom,
     visit: {
@@ -69,6 +79,13 @@ function setup(threadName: string, initial: Omit<Shell, "environmentId" | "id"> 
     },
     reconnect: () => registry.set(sessionGenerationAtom, registry.get(sessionGenerationAtom) + 1),
     mount: () => registry.mount(tracker(ref)),
+    setCaughtUp: (caughtUp: boolean) =>
+      registry.set(readingAtom, { ...registry.get(readingAtom), caughtUp }),
+    markRead: () =>
+      registry.set(readingAtom, {
+        ...registry.get(readingAtom),
+        markedRead: registry.get(readingAtom).markedRead + 1,
+      }),
     setOnline: (value: boolean) => {
       online = value;
     },
@@ -312,4 +329,58 @@ it("retries rejected opens only once per connection generation", async () => {
   t.update({ updatedAt: at(20), latestRun: { completedAt: at(20) } });
   await vi.advanceTimersByTimeAsync(3 * VISIT_DISPATCH_THROTTLE_MS);
   expect(t.attempts).toHaveLength(2);
+});
+
+it("holds the mark while the reader has not caught up, and records only the open", () => {
+  using t = setup(
+    "thread-reading-held",
+    { updatedAt: at(10), lastVisitedAt: at(2), latestRun: null },
+    { tracksReading: true },
+  );
+  t.mount();
+  expect(t.visits).toEqual([{ threadId: t.ref.threadId, visitedAt: at(2), opened: true }]);
+  t.update({ updatedAt: at(20), latestRun: { completedAt: at(20) } });
+  vi.advanceTimersByTime(VISIT_DISPATCH_THROTTLE_MS * 2);
+  expect(t.visits).toHaveLength(1);
+});
+
+it("sends the mark at once when the reader catches up, and keeps up while they follow", () => {
+  using t = setup(
+    "thread-reading-caught-up",
+    { updatedAt: at(10), lastVisitedAt: at(2), latestRun: null },
+    { tracksReading: true },
+  );
+  t.mount();
+  t.setCaughtUp(true);
+  expect(t.visits.slice(1)).toEqual([{ threadId: t.ref.threadId, visitedAt: at(10) }]);
+  t.update({ updatedAt: at(30), latestRun: { completedAt: at(30) } });
+  expect(t.visits.slice(2)).toEqual([{ threadId: t.ref.threadId, visitedAt: at(30) }]);
+});
+
+it("marks read by hand while scrolled up, and leaves later arrivals unread", () => {
+  using t = setup(
+    "thread-reading-marked",
+    { updatedAt: at(10), lastVisitedAt: at(2), latestRun: null },
+    { tracksReading: true },
+  );
+  t.mount();
+  t.markRead();
+  expect(t.visits.slice(1)).toEqual([{ threadId: t.ref.threadId, visitedAt: at(10) }]);
+  t.update({ updatedAt: at(40), latestRun: { completedAt: at(40) } });
+  vi.advanceTimersByTime(VISIT_DISPATCH_THROTTLE_MS * 2);
+  expect(t.visits).toHaveLength(2);
+});
+
+it("stops marking once the reader scrolls back up", () => {
+  using t = setup(
+    "thread-reading-scrolled-up",
+    { updatedAt: at(10), lastVisitedAt: at(2), latestRun: null },
+    { tracksReading: true },
+  );
+  t.mount();
+  t.setCaughtUp(true);
+  t.setCaughtUp(false);
+  t.update({ updatedAt: at(50), latestRun: { completedAt: at(50) } });
+  vi.advanceTimersByTime(VISIT_DISPATCH_THROTTLE_MS * 2);
+  expect(t.visits.map((visit) => visit.visitedAt)).toEqual([at(2), at(10)]);
 });

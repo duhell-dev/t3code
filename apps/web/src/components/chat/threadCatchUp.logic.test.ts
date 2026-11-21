@@ -1,67 +1,101 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { deriveTimelineCatchUp, resolveCatchUpWindow } from "./threadCatchUp.logic";
+import {
+  CATCH_UP_DWELL_MS,
+  deriveTimelineCatchUp,
+  nextCaughtUp,
+  NOT_CAUGHT_UP,
+  type CaughtUpState,
+} from "./threadCatchUp.logic";
 
 const at = (minute: number) => `2026-01-01T10:${String(minute).padStart(2, "0")}:00.000Z`;
 
-describe("resolveCatchUpWindow", () => {
+function walk(steps: ReadonlyArray<{ atEnd: boolean; focused: boolean; nowMs: number }>) {
+  let state: CaughtUpState = NOT_CAUGHT_UP;
+  for (const step of steps) state = nextCaughtUp(state, step);
+  return state.caughtUp;
+}
+
+describe("nextCaughtUp", () => {
   it.each([
     {
-      name: "starts at the visit when it is later",
-      shell: { lastVisitedAt: at(20), latestUserAuthoredMessageAt: at(10), updatedAt: at(40) },
-      window: { boundary: at(20), until: at(40) },
+      name: "staying at the end of a focused thread for the dwell catches up",
+      steps: [
+        { atEnd: true, focused: true, nowMs: 0 },
+        { atEnd: true, focused: true, nowMs: CATCH_UP_DWELL_MS },
+      ],
+      caughtUp: true,
     },
     {
-      name: "starts at the reader's own prompt when it is later",
-      shell: { lastVisitedAt: at(10), latestUserAuthoredMessageAt: at(20), updatedAt: at(40) },
-      window: { boundary: at(20), until: at(40) },
+      name: "scrolling past the end does not",
+      steps: [
+        { atEnd: true, focused: true, nowMs: 0 },
+        { atEnd: false, focused: true, nowMs: 400 },
+        { atEnd: true, focused: true, nowMs: 1_000 },
+        { atEnd: true, focused: true, nowMs: 1_000 + CATCH_UP_DWELL_MS - 1 },
+      ],
+      caughtUp: false,
     },
     {
-      name: "nothing after the boundary",
-      shell: { lastVisitedAt: at(40), latestUserAuthoredMessageAt: at(10), updatedAt: at(40) },
-      window: null,
+      name: "the end of an unfocused window does not",
+      steps: [
+        { atEnd: true, focused: false, nowMs: 0 },
+        { atEnd: true, focused: false, nowMs: CATCH_UP_DWELL_MS * 4 },
+      ],
+      caughtUp: false,
     },
     {
-      name: "no visit and no prompt",
-      shell: { lastVisitedAt: null, latestUserAuthoredMessageAt: null, updatedAt: at(40) },
-      window: null,
+      name: "scrolling up ends it at once",
+      steps: [
+        { atEnd: true, focused: true, nowMs: 0 },
+        { atEnd: true, focused: true, nowMs: CATCH_UP_DWELL_MS },
+        { atEnd: false, focused: true, nowMs: CATCH_UP_DWELL_MS + 1 },
+      ],
+      caughtUp: false,
     },
-  ])("$name", ({ shell, window }) => {
-    expect(resolveCatchUpWindow(shell)).toEqual(window);
+  ])("$name", ({ steps, caughtUp }) => {
+    expect(walk(steps)).toBe(caughtUp);
+  });
+
+  it("asks to be woken when the dwell ends", () => {
+    expect(nextCaughtUp(NOT_CAUGHT_UP, { atEnd: true, focused: true, nowMs: 100 })).toEqual({
+      caughtUp: false,
+      readySinceMs: 100,
+      wakeAtMs: 100 + CATCH_UP_DWELL_MS,
+    });
   });
 });
 
 describe("deriveTimelineCatchUp", () => {
-  const message = (id: string, minute: number, role: string, runId: string | null) => ({
-    kind: "message" as const,
+  const message = (minute: number, role: string, createdBy: string, idleCompaction?: string) => ({
+    kind: "message",
     createdAt: at(minute),
-    message: { id, role, runId },
+    message: { role, createdBy, ...(idleCompaction ? { idleCompaction } : {}) },
   });
   const entries = [
-    message("seen", 5, "assistant", "run-0"),
-    message("a1", 21, "assistant", "run-1"),
-    { kind: "work", createdAt: at(22) },
-    message("a2", 23, "assistant", "run-1"),
-    message("wake", 30, "user", null),
-    message("a3", 31, "assistant", "run-2"),
-    // Arrived while the reader was already looking.
-    message("live", 45, "assistant", "run-3"),
+    message(5, "assistant", "agent"),
+    message(21, "user", "user"),
+    message(22, "assistant", "agent"),
+    { kind: "work", createdAt: at(23) },
+    message(24, "assistant", "agent"),
+    message(25, "user", "agent"),
+    message(26, "user", "agent", "beforeCacheExpires"),
   ];
   const rows = [
     { id: "seen", kind: "message", createdAt: at(5) },
-    { id: "work-1", kind: "work", createdAt: at(21) },
-    { id: "a3", kind: "message", createdAt: at(31) },
-    { id: "working", kind: "working", createdAt: at(46) },
+    { id: "prompt", kind: "message", createdAt: at(21) },
+    { id: "answer", kind: "message", createdAt: at(22) },
+    { id: "working", kind: "working", createdAt: at(30) },
   ];
 
-  it("puts the line on the first missed row and counts each run's answer once", () => {
-    expect(deriveTimelineCatchUp(rows, entries, { boundary: at(20), until: at(40) })).toEqual({
-      rowId: "work-1",
-      answerCount: 2,
+  it("puts the line on the first row after the boundary and counts what others wrote", () => {
+    expect(deriveTimelineCatchUp(rows, entries, at(20))).toEqual({
+      rowId: "prompt",
+      unreadCount: 3,
     });
   });
 
-  it("has nothing when only the reader's live view added answers", () => {
-    expect(deriveTimelineCatchUp(rows, entries, { boundary: at(40), until: at(44) })).toBeNull();
+  it("has nothing once the boundary passes the newest message", () => {
+    expect(deriveTimelineCatchUp(rows, entries, at(26))).toBeNull();
   });
 });
