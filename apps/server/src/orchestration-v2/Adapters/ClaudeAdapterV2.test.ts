@@ -380,12 +380,16 @@ describe("ClaudeAdapterV2 runtime query policy", () => {
     assert.isUndefined(options.extraArgs?.["dangerously-skip-permissions"]);
   });
 
-  it("passes every --add-dir and --plugin-dir launch directory to Claude", () => {
+  it("passes the thread's other folders and every --add-dir and --plugin-dir launch directory to Claude", () => {
     const options = ClaudeAdapterV2.makeClaudeQueryOptions({
       modelSelection: CLAUDE_TEST_MODEL_SELECTION,
       nativeThreadId: "native-add-dir",
       resume: false,
       cwd: "/workspace",
+      workspace: {
+        folders: [{ name: "api", path: "/repos/api", isGitRepository: true }],
+        extraRoots: ["/repos/api"],
+      },
       attachmentsDir: "/attachments",
       settings: {
         ...AUTO_COMPACT_CLAUDE_SETTINGS,
@@ -395,12 +399,21 @@ describe("ClaudeAdapterV2 runtime query policy", () => {
     });
     assert.deepEqual(options.additionalDirectories, [
       "/workspace",
+      "/repos/api",
       "/attachments",
       "../apps",
       "../lib",
       "/shared",
     ]);
     assert.isUndefined(options.extraArgs?.["add-dir"]);
+    assert.include(
+      (options.systemPrompt as { readonly append?: string }).append,
+      "<workspace_folders>\nThis project spans several folders.",
+    );
+    assert.include(
+      (options.systemPrompt as { readonly append?: string }).append,
+      "- api (Git repository): /repos/api\n</workspace_folders>",
+    );
     assert.deepEqual(options.plugins, [
       { type: "local", path: "./a" },
       { type: "local", path: "./b.zip" },
@@ -722,7 +735,7 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
     assert.isFalse(overrides.allowedTools?.includes(ClaudeAdapterV2.CLAUDE_T3_MCP_TOOL_WILDCARD));
   });
 
-  it("invalidates live-query reuse when MCP credentials rotate", () => {
+  it("invalidates live-query reuse when MCP credentials rotate or tracked folders change", () => {
     const threadId = ThreadId.make("thread-claude-mcp-credential-rotation");
     const mcpSession = mcpSessionFor(threadId);
     const queryPolicy = ClaudeAdapterV2.claudeRuntimeQueryPolicyForRuntimePolicy(
@@ -745,6 +758,25 @@ describe("ClaudeAdapterV2 MCP query overrides", () => {
       }),
     );
     assert.notEqual(rotatedKey, initialKey);
+    // A query fixes its directories at start, so a changed folder list needs a new one too.
+    const overrides = ClaudeAdapterV2.claudeMcpQueryOverrides({
+      mcpSession,
+      readOnlySandbox: false,
+    });
+    const workspace = (path: string) => ({
+      folders: [{ name: "api", path, isGitRepository: true }],
+      extraRoots: [path],
+    });
+    const keyFor = (path?: string) =>
+      ClaudeAdapterV2.claudeEffectiveQueryPolicyKey(
+        queryPolicy,
+        overrides,
+        path === undefined ? undefined : workspace(path),
+      );
+    assert.equal(keyFor(), initialKey);
+    assert.notEqual(keyFor("/repos/api"), initialKey);
+    assert.notEqual(keyFor("/repos/api"), keyFor("/repos/api-moved"));
+    assert.equal(keyFor("/repos/api"), keyFor("/repos/api"));
   });
 
   it("matches the read-only allowlist to the orchestrator toolkit annotations", () => {
@@ -6295,6 +6327,12 @@ describe("ClaudeAdapterV2 background wake turns", () => {
           }),
         );
       yield* harness.offerAndWait(
+        makeAssistantTextFrame({
+          uuid: "00000000-0000-4000-8000-000000002505",
+          text: "Build answer.",
+        }),
+      );
+      yield* harness.offerAndWait(
         claudeSdkFrame({
           ...makeResultFrame({ uuid: "00000000-0000-4000-8000-000000002500", result: "Built." }),
           user_message_uuid: harness.promptUuid(0),
@@ -6319,6 +6357,20 @@ describe("ClaudeAdapterV2 background wake turns", () => {
         (event) => event.type === "message.updated" && event.message.text === "Steer reply.",
       );
       assert.equal(reply?.type === "message.updated" ? reply.message.runId : null, input.runId);
+      // Claude ended its native turn on this answer before it read the steer, so the timeline
+      // must not fold it away as a progress note of the run's last reply.
+      const answer = harness.events.findLast(
+        (event) =>
+          event.type === "turn_item.updated" &&
+          event.turnItem.type === "assistant_message" &&
+          event.turnItem.text === "Build answer.",
+      );
+      assert.equal(
+        answer?.type === "turn_item.updated" && answer.turnItem.type === "assistant_message"
+          ? answer.turnItem.phase
+          : null,
+        "final_answer",
+      );
       assert.deepEqual(
         harness.events.flatMap((event) =>
           event.type === "steer.updated" ? [[event.messageId, event.status]] : [],
