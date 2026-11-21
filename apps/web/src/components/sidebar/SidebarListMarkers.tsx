@@ -147,7 +147,7 @@ export function SidebarSectionHeader(props: {
           <span className="flex items-center gap-1.5">
             {props.unreadCount ? (
               <Badge
-                variant="error"
+                variant="count"
                 size="sm"
                 aria-label={gt(
                   "{count, plural, one {{count} new message} other {{count} new messages}}",
