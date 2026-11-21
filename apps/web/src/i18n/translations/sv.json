@@ -4102,6 +4102,16 @@
       "v": "v"
     }
   ],
+  "573dfa61a3862a2e": "{count, plural, one {{count} nytt svar sedan du senast tittade ({time})} other {{count} nya svar sedan du senast tittade ({time})}}",
+  "6160a489c4bfb7e4": "Hoppa till nytt",
+  "b8736743b1ab48f3": "Markera som läst",
+  "46a0f0c938cbe0a0": "Nytt · sedan {time}",
+  "9f4b9c49a0596782": "Sedan ditt senaste besök",
+  "e5f264dab0a413ee": "{count, plural, one {· {count} svar} other {· {count} svar}}",
+  "d647b9399a8bbbaf": "{count, plural, one {· {count} svar · sammanfattat av {model}} other {· {count} svar · sammanfattat av {model}}}",
+  "3625e33343c1bdb5": "Att göra för dig: {count}",
+  "f888faa26b571974": "Ingen sammanfattning den här gången: {error}",
+  "6d71573f92014041": "Sammanfattar …",
   "e58a1d884fa1d8f2": "Tråddetaljer",
   "43c5fbd02c6f330a": "Visa mindre",
   "de45b075b016cb14": [
@@ -11941,6 +11951,7 @@
   "9d9d32b401d2931a": "{count, plural, one {{count} terminalprocess körs} other {{count} terminalprocesser körs}}",
   "ade06f6723949b39": "Ett fel uppstod",
   "021fe65858278fe9": "Snooza tråd",
+  "03ee82a54a9633b1": "{count, plural, one {{count} nytt svar} other {{count} nya svar}}",
   "e7c18f33bc1326f7": "Konfigurerar",
   "26375cafb52d0503": "Mål",
   "ad78fae7d373cf21": "Arbetar",

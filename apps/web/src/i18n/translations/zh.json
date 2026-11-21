@@ -4107,6 +4107,16 @@
       "v": "v"
     }
   ],
+  "573dfa61a3862a2e": "{count, plural, other {自你上次查看以来有 {count} 条新回复（{time}）}}",
+  "6160a489c4bfb7e4": "跳到新内容",
+  "b8736743b1ab48f3": "标记为已读",
+  "46a0f0c938cbe0a0": "新 · 自 {time} 起",
+  "9f4b9c49a0596782": "自你上次访问以来",
+  "e5f264dab0a413ee": "{count, plural, other {· {count} 条回复}}",
+  "d647b9399a8bbbaf": "{count, plural, other {· {count} 条回复 · 由 {model} 总结}}",
+  "3625e33343c1bdb5": "待你处理：{count}",
+  "f888faa26b571974": "本次没有摘要：{error}",
+  "6d71573f92014041": "正在总结…",
   "e58a1d884fa1d8f2": "会话详情",
   "43c5fbd02c6f330a": "收起",
   "de45b075b016cb14": [
@@ -11957,6 +11967,7 @@
   "9d9d32b401d2931a": "{count, plural, other {{count} 个终端进程正在运行}}",
   "ade06f6723949b39": "发生错误",
   "021fe65858278fe9": "暂缓会话",
+  "03ee82a54a9633b1": "{count, plural, other {{count} 条新回复}}",
   "e7c18f33bc1326f7": "正在设置",
   "26375cafb52d0503": "目标",
   "ad78fae7d373cf21": "运行中",

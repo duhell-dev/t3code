@@ -295,7 +295,11 @@ const makeTest = Effect.fn("serverSettings.makeTest")(function* (
 ) {
   const { automaticGitFetchInterval, providerHealthRefreshInterval, ...overridesForMerge } =
     overrides;
-  const merged = deepMerge(DEFAULT_SERVER_SETTINGS, overridesForMerge);
+  // Tests drive wakes themselves; a quiet window would hold them on the TestClock unless asked.
+  const merged = deepMerge(
+    { ...DEFAULT_SERVER_SETTINGS, agentInputQuietSeconds: 0 },
+    overridesForMerge,
+  );
   const initialSettings = yield* normalizeServerSettings({
     ...merged,
     ...(automaticGitFetchInterval !== undefined

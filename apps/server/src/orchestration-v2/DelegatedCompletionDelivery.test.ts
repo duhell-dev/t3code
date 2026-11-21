@@ -167,7 +167,13 @@ const layerTest = Layer.mergeAll(
 
 // ProviderContinuationService consumes the orchestrator's continuation queue, as in production.
 const layerContinuationWorkerTest = ProviderContinuationService.layer.pipe(
-  Layer.provide(Layer.merge(ProviderContinuationRequests.layer, IdAllocator.layer)),
+  Layer.provide(
+    Layer.mergeAll(
+      ProviderContinuationRequests.layer,
+      IdAllocator.layer,
+      ServerSettings.layerTest(),
+    ),
+  ),
   Layer.provideMerge(layerTest),
 );
 

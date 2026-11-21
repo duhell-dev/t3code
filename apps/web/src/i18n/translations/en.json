@@ -4103,6 +4103,16 @@
       "v": "v"
     }
   ],
+  "573dfa61a3862a2e": "{count, plural, one {{count} new answer since you last looked ({time})} other {{count} new answers since you last looked ({time})}}",
+  "6160a489c4bfb7e4": "Jump to new",
+  "b8736743b1ab48f3": "Mark as read",
+  "46a0f0c938cbe0a0": "New · since {time}",
+  "9f4b9c49a0596782": "Since your last visit",
+  "e5f264dab0a413ee": "{count, plural, one {· {count} answer} other {· {count} answers}}",
+  "d647b9399a8bbbaf": "{count, plural, one {· {count} answer · summarized by {model}} other {· {count} answers · summarized by {model}}}",
+  "3625e33343c1bdb5": "For you to do: {count}",
+  "f888faa26b571974": "No summary this time: {error}",
+  "6d71573f92014041": "Summarizing…",
   "e58a1d884fa1d8f2": "Thread details",
   "43c5fbd02c6f330a": "Show less",
   "de45b075b016cb14": [
@@ -11943,6 +11953,7 @@
   "9d9d32b401d2931a": "{count, plural, one {{count} terminal process running} other {{count} terminal processes running}}",
   "ade06f6723949b39": "Error occurred",
   "021fe65858278fe9": "Snooze thread",
+  "03ee82a54a9633b1": "{count, plural, one {{count} new answer} other {{count} new answers}}",
   "e7c18f33bc1326f7": "Setting up",
   "26375cafb52d0503": "Goal",
   "ad78fae7d373cf21": "Working",

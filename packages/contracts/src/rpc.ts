@@ -446,6 +446,12 @@ import {
   SourceControlSignInResult,
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
+import {
+  THREAD_CATCH_UP_WS_METHOD,
+  ThreadCatchUpError,
+  ThreadCatchUpInput,
+  ThreadCatchUpResult,
+} from "./threadCatchUp.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 
 export const WS_METHODS = {
@@ -2025,6 +2031,12 @@ const WsOrchestrationV2SearchThreadRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.se
   error: Schema.Union([OrchestrationV2SearchThreadError, EnvironmentAuthorizationError]),
 });
 
+const WsOrchestrationV2GetThreadCatchUpRpc = Rpc.make(THREAD_CATCH_UP_WS_METHOD, {
+  payload: ThreadCatchUpInput,
+  success: ThreadCatchUpResult,
+  error: Schema.Union([ThreadCatchUpError, EnvironmentAuthorizationError]),
+});
+
 const WsOrchestrationV2SearchThreadStreamRpc = Rpc.make(
   ORCHESTRATION_V2_WS_METHODS.searchThreadStream,
   {
@@ -2529,6 +2541,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2SearchThreadsRpc,
   WsOrchestrationV2SearchThreadRpc,
   WsOrchestrationV2SearchThreadStreamRpc,
+  WsOrchestrationV2GetThreadCatchUpRpc,
   WsOrchestrationV2GetArchivedShellSnapshotRpc,
   WsOrchestrationV2GetThreadFamilyRpc,
   WsOrchestrationV2GetThreadTitlesRpc,

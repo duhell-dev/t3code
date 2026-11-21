@@ -9,6 +9,7 @@ import {
   RunId,
   ThreadId,
   type OrchestrationV2ThreadProjection,
+  type OrchestrationV2DomainEvent,
   type OrchestrationV2Notification,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
@@ -20,6 +21,7 @@ import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Semaphore from "effect/Semaphore";
+import * as Stream from "effect/Stream";
 import * as TestClock from "effect/testing/TestClock";
 
 import * as IdAllocator from "@t3tools/provider-core/server/IdAllocator";
@@ -27,6 +29,7 @@ import * as ProviderContinuationRequests from "@t3tools/provider-core/server/Pro
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProviderContinuationService from "./ProviderContinuationService.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
+import * as ServerSettings from "../serverSettings.ts";
 
 const threadId = ThreadId.make("thread-provider-continuation");
 const providerThreadId = ProviderThreadId.make("provider-thread-continuation");
@@ -97,9 +100,13 @@ function layerTest(input: {
   readonly dispatched: Queue.Queue<unknown>;
   readonly getThreadRecords: () => Effect.Effect<OrchestrationV2ThreadProjection>;
   readonly beforeDispatch?: (threadId: ThreadId) => Effect.Effect<void>;
+  readonly agentInputQuietSeconds?: number;
+  readonly domainEvents?: Queue.Queue<OrchestrationV2DomainEvent>;
 }) {
   const layerThreads = Layer.mock(ThreadManagementService.ThreadManagementService)({
     getThreadRecords: input.getThreadRecords,
+    streamDomainEvents:
+      input.domainEvents === undefined ? Stream.never : Stream.fromQueue(input.domainEvents),
     dispatch: (command) =>
       (
         ("threadId" in command ? input.beforeDispatch?.(command.threadId) : undefined) ??
@@ -108,7 +115,12 @@ function layerTest(input: {
   });
   const layerWorker = ProviderContinuationService.layer.pipe(
     Layer.provide(
-      Layer.mergeAll(IdAllocator.layer, ProviderContinuationRequests.layer, layerThreads),
+      Layer.mergeAll(
+        IdAllocator.layer,
+        ProviderContinuationRequests.layer,
+        layerThreads,
+        ServerSettings.layerTest({ agentInputQuietSeconds: input.agentInputQuietSeconds ?? 0 }),
+      ),
     ),
   );
   return Layer.merge(ProviderContinuationRequests.layer, layerWorker);
@@ -284,7 +296,12 @@ describe("ProviderContinuationService", () => {
         });
         const layerWorker = ProviderContinuationService.layer.pipe(
           Layer.provide(
-            Layer.mergeAll(IdAllocator.layer, ProviderContinuationRequests.layer, layerThreads),
+            Layer.mergeAll(
+              IdAllocator.layer,
+              ProviderContinuationRequests.layer,
+              layerThreads,
+              ServerSettings.layerTest(),
+            ),
           ),
         );
 
@@ -348,7 +365,12 @@ describe("ProviderContinuationService", () => {
         });
         const layerWorker = ProviderContinuationService.layer.pipe(
           Layer.provide(
-            Layer.mergeAll(IdAllocator.layer, ProviderContinuationRequests.layer, layerThreads),
+            Layer.mergeAll(
+              IdAllocator.layer,
+              ProviderContinuationRequests.layer,
+              layerThreads,
+              ServerSettings.layerTest(),
+            ),
           ),
         );
 
@@ -397,7 +419,12 @@ describe("ProviderContinuationService", () => {
         });
         const layerWorker = ProviderContinuationService.layer.pipe(
           Layer.provide(
-            Layer.mergeAll(IdAllocator.layer, ProviderContinuationRequests.layer, layerThreads),
+            Layer.mergeAll(
+              IdAllocator.layer,
+              ProviderContinuationRequests.layer,
+              layerThreads,
+              ServerSettings.layerTest(),
+            ),
           ),
         );
 
@@ -444,7 +471,12 @@ describe("ProviderContinuationService", () => {
         });
         const layerWorker = ProviderContinuationService.layer.pipe(
           Layer.provide(
-            Layer.mergeAll(IdAllocator.layer, ProviderContinuationRequests.layer, layerThreads),
+            Layer.mergeAll(
+              IdAllocator.layer,
+              ProviderContinuationRequests.layer,
+              layerThreads,
+              ServerSettings.layerTest(),
+            ),
           ),
         );
 
@@ -660,5 +692,117 @@ describe("ProviderContinuationService", () => {
         );
       });
     },
+  );
+  it.effect(
+    "an idle thread collects delegated completions until its quiet window passes without one",
+    () =>
+      Effect.gen(function* () {
+        const dispatched = yield* Queue.unbounded<unknown>();
+        const dispatchedAt: number[] = [];
+        let current = {
+          ...delegatedProjection(),
+          subagents: [],
+        } as OrchestrationV2ThreadProjection;
+        const completion = {
+          threadId,
+          providerThreadId,
+          driver,
+          detail: null,
+          delivery: "message_text" as const,
+          delegatedCompletion: { parentRunId, generation: 1, messageId: delegatedMessageId },
+        };
+        yield* Effect.gen(function* () {
+          const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
+          yield* requests.offer(completion);
+          yield* TestClock.adjust("60 seconds");
+          // A sibling finishing joins the claimed delivery and offers it again.
+          const run = current.runs[0]!;
+          const delivery = run.delegatedCompletion!.delivery!;
+          current = {
+            ...current,
+            runs: [
+              {
+                ...run,
+                delegatedCompletion: {
+                  ...run.delegatedCompletion!,
+                  delivery: {
+                    ...delivery,
+                    taskIds: [...delivery.taskIds, "node-provider-continuation-third"],
+                  },
+                },
+              },
+            ],
+          } as unknown as OrchestrationV2ThreadProjection;
+          yield* requests.offer(completion);
+          yield* TestClock.adjust("60 seconds");
+          assert.isTrue(Option.isNone(yield* Queue.poll(dispatched)));
+          yield* TestClock.adjust("30 seconds");
+          const command = (yield* Queue.take(dispatched)) as {
+            readonly delegatedCompletion: { readonly taskIds: ReadonlyArray<string> };
+          };
+          assert.deepEqual(dispatchedAt, [150_000]);
+          assert.deepEqual(command.delegatedCompletion.taskIds, [
+            "node-provider-continuation-first",
+            "node-provider-continuation-second",
+            "node-provider-continuation-third",
+          ]);
+          yield* Effect.yieldNow;
+          assert.isTrue(Option.isNone(yield* Queue.poll(dispatched)));
+        }).pipe(
+          Effect.provide(
+            layerTest({
+              dispatched,
+              agentInputQuietSeconds: 90,
+              getThreadRecords: () => Effect.sync(() => current),
+              beforeDispatch: () =>
+                Clock.currentTimeMillis.pipe(Effect.map((now) => void dispatchedAt.push(now))),
+            }),
+          ),
+          Effect.scoped,
+        );
+      }),
+  );
+
+  it.effect("a new run on the thread releases its held completions at once", () =>
+    Effect.gen(function* () {
+      const dispatched = yield* Queue.unbounded<unknown>();
+      const domainEvents = yield* Queue.unbounded<OrchestrationV2DomainEvent>();
+      const dispatchedAt: number[] = [];
+      yield* Effect.gen(function* () {
+        const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
+        yield* requests.offer({
+          threadId,
+          providerThreadId,
+          driver,
+          detail: null,
+          delivery: "message_text",
+          delegatedCompletion: { parentRunId, generation: 1, messageId: delegatedMessageId },
+        });
+        yield* TestClock.adjust("10 seconds");
+        assert.isTrue(Option.isNone(yield* Queue.poll(dispatched)));
+        yield* Queue.offer(domainEvents, {
+          type: "run.created",
+          threadId,
+        } as unknown as OrchestrationV2DomainEvent);
+        yield* Queue.take(dispatched);
+        assert.deepEqual(dispatchedAt, [10_000]);
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            dispatched,
+            domainEvents,
+            agentInputQuietSeconds: 90,
+            getThreadRecords: () =>
+              Effect.succeed({
+                ...delegatedProjection(),
+                subagents: [],
+              } as OrchestrationV2ThreadProjection),
+            beforeDispatch: () =>
+              Clock.currentTimeMillis.pipe(Effect.map((now) => void dispatchedAt.push(now))),
+          }),
+        ),
+        Effect.scoped,
+      );
+    }),
   );
 });

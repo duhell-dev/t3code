@@ -2323,6 +2323,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   /** Absent on threads written before tags existed; read as empty. */
   tags: Schema.optional(StoredThreadTags),
   lastVisitedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
+  /** Messages not written by the user since the later of the last visit and the user's last message. Absent from older servers. */
+  unreadMessageCount: Schema.optional(NonNegativeInt),
   opens: Schema.optional(LenientThreadOpens),
   titleRegeneration: Schema.optional(
     Schema.NullOr(

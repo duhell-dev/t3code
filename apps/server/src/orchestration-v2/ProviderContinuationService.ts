@@ -4,6 +4,7 @@ import {
   type OrchestrationV2ThreadProjection,
   type ThreadId,
 } from "@t3tools/contracts";
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -16,6 +17,8 @@ import * as KeyedLock from "@t3tools/shared/KeyedLock";
 import type * as Orchestrator from "./Orchestrator.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
 import { isUndeliveredMailboxSteer } from "./NotificationMailbox.ts";
+import { agentInputHoldUntil } from "./AgentInputQuietWindow.ts";
+import * as ServerSettings from "../serverSettings.ts";
 
 const CONTINUATION_MESSAGE_TEXT = "Background task completed.";
 
@@ -66,6 +69,92 @@ export const layer = Layer.effectDiscard(
     const threads = yield* ThreadManagementService.ThreadManagementService;
     const retryAttempts = yield* Ref.make(new Map<string, number>());
     const continuations = yield* KeyedLock.makeRunner<ThreadId>();
+    const serverSettings = yield* ServerSettings.ServerSettingsService;
+    // Completions an idle thread is collecting, per delivery; `token` names the latest timer.
+    const quietHolds = new Map<
+      string,
+      { readonly firstHeldAtMs: number; readonly token: number; readonly released: boolean }
+    >();
+
+    // Holds a delegated completion to an idle thread until its quiet window ends, so siblings
+    // finishing meanwhile join the same delivery and one run answers them all. Any new run on
+    // the thread, like a person's message, releases it at once.
+    const holdForQuietWindow = Effect.fn("ProviderContinuationService.holdForQuietWindow")(
+      function* (
+        request: ProviderContinuationRequests.ProviderContinuationRequest,
+        completion: NonNullable<
+          ProviderContinuationRequests.ProviderContinuationRequest["delegatedCompletion"]
+        >,
+        taskIds: ReadonlyArray<string>,
+      ) {
+        const key = delegatedCompletionRetryKey(request, completion);
+        const existing = quietHolds.get(key);
+        if (existing?.released === true) {
+          quietHolds.delete(key);
+          return false;
+        }
+        const quietSeconds = yield* serverSettings.getSettings.pipe(
+          Effect.map((settings) => settings.agentInputQuietSeconds),
+          Effect.orElseSucceed(() => 0),
+        );
+        if (quietSeconds <= 0) return false;
+        const projection = yield* threads.getThreadRecords(
+          request.threadId,
+          ["runs", "subagents"],
+          {
+            subagentRunIds: [completion.parentRunId],
+          },
+        );
+        const nowMs = yield* Clock.currentTimeMillis;
+        const dueAtMs = agentInputHoldUntil({
+          quietMs: quietSeconds * 1_000,
+          nowMs,
+          firstHeldAtMs: existing?.firstHeldAtMs,
+          threadIdle: !projection.runs.some(
+            (run) => run.status === "queued" || ThreadManagementService.isActiveRun(run),
+          ),
+          siblingsRunning: projection.subagents.some(
+            (task) =>
+              task.runId === completion.parentRunId &&
+              !taskIds.includes(task.id) &&
+              (task.status === "pending" || task.status === "running"),
+          ),
+        });
+        if (dueAtMs === null) {
+          quietHolds.delete(key);
+          return false;
+        }
+        const token = (existing?.token ?? 0) + 1;
+        quietHolds.set(key, {
+          firstHeldAtMs: existing?.firstHeldAtMs ?? nowMs,
+          token,
+          released: false,
+        });
+        const runStarted = threads.streamDomainEvents.pipe(
+          Stream.filter(
+            (event) => event.type === "run.created" && event.threadId === request.threadId,
+          ),
+          Stream.runHead,
+          Effect.ignore,
+        );
+        yield* runStarted.pipe(
+          Effect.timeoutOrElse({
+            duration: `${dueAtMs - nowMs} millis`,
+            orElse: () => Effect.void,
+          }),
+          Effect.andThen(
+            Effect.suspend(() => {
+              const current = quietHolds.get(key);
+              if (current?.token !== token) return Effect.void;
+              quietHolds.set(key, { ...current, released: true });
+              return requests.offer(request);
+            }),
+          ),
+          Effect.forkScoped,
+        );
+        return true;
+      },
+    );
 
     const clearRetryAttempt = (key: string) =>
       Ref.update(retryAttempts, (current) => {
@@ -168,6 +257,9 @@ export const layer = Layer.effectDiscard(
           );
           if (delivery === undefined) {
             yield* clearRetryAttempt(retryKey);
+            return;
+          }
+          if (yield* holdForQuietWindow(request, request.delegatedCompletion, delivery.taskIds)) {
             return;
           }
           const commandId = yield* ids.allocate.command({

@@ -244,6 +244,21 @@ thread** from its long-press menu on mobile.
 **Thread ID** copies the bare ID for scripts and the `t3` CLI. See
 [keybindings](./keybindings.md) for custom configuration.
 
+## Catch up on a thread
+
+A number next to a thread in the sidebar counts the answers its agents wrote since you last
+looked. Open the thread and it starts at a **New** line above the first of them, with a bar on top
+to jump back there or mark everything read.
+
+When enough happened, a **Since your last visit** box above the line sums it up in a few lines,
+with what waits on you first. The text generation model writes it when you open the thread, so a
+thread you never open costs nothing. Fold the box to read the messages themselves.
+
+While a thread is idle, it collects finished delegated tasks for a quiet minute and a half, so
+one run answers several helpers instead of one run each. A message you send never waits. Change
+the window with `agentInputQuietSeconds` in the server's `settings.json` (0 turns it off, at most
+600).
+
 ## Inspect agent work
 
 **Limited** means the provider stopped on a usage or rate limit. The conversation

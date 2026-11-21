@@ -103,6 +103,8 @@ import { cn } from "~/lib/utils";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { type HandoffTimelineRun } from "./V2LifecycleRow";
 import { TimelineSystemDivider } from "./TimelineSystemDivider";
+import { ThreadCatchUpBar, ThreadCatchUpMarker } from "./ThreadCatchUp";
+import { deriveTimelineCatchUp, type ThreadCatchUpWindow } from "./threadCatchUp.logic";
 
 import { forwardWheelToTimeline } from "./timelineMinimapWheel";
 import { TimelineMinimap } from "./TimelineMinimap";
@@ -162,6 +164,7 @@ function timelineListStateFor(identity: string): {
 }
 
 const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
+const CATCH_UP_BAR_CLEARANCE = 40;
 const TIMELINE_LIST_FADE_HEADER = (
   <div className="h-[var(--workspace-titlebar-scroll-fade-height)]" />
 );
@@ -333,6 +336,15 @@ interface MessagesTimelineProps {
   findQuery?: string;
   activeFindMatch?: ThreadFindMatch | null;
   findNavigationId?: number;
+  /** What the reader missed since their last visit; see resolveCatchUpWindow. */
+  catchUp?: {
+    readonly environmentId: EnvironmentId;
+    readonly threadId: ThreadId;
+    readonly window: ThreadCatchUpWindow;
+    readonly barVisible: boolean;
+    readonly onMarkRead: () => void;
+    readonly onJumped: () => void;
+  } | null;
 }
 
 export function MessagesTimeline(props: MessagesTimelineProps) {
@@ -426,6 +438,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   emptyPlaceholderInset,
   topFadeEnabled = false,
   historyControls,
+  catchUp = null,
 }: MessagesTimelineProps) {
   const gt = useGT();
   const listIdentityKey = displayThreadKey ?? routeThreadKey;
@@ -764,6 +777,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
     revealedMessageId,
   });
   const rows = useStableRows(rawRows, listIdentityKey);
+  const timelineCatchUp =
+    catchUp === null ? null : deriveTimelineCatchUp(rows, timelineEntries, catchUp.window);
   const matchedApprovalRequestIds = new Set<string>();
   for (const row of pendingApprovalRequestIds.size > 0 ? rows : []) {
     const entries =
@@ -1378,6 +1393,14 @@ const ConversationTimeline = memo(function ConversationTimeline({
           className="chat-content-lane overflow-x-clip"
           data-timeline-root="true"
         >
+          {catchUp !== null && timelineCatchUp?.rowId === item.id ? (
+            <ThreadCatchUpMarker
+              environmentId={catchUp.environmentId}
+              threadId={catchUp.threadId}
+              window={catchUp.window}
+              answerCount={timelineCatchUp.answerCount}
+            />
+          ) : null}
           <AudioPreviewUnmountContext value={onAudioUnmount}>
             <TimelineRowContent row={item} />
           </AudioPreviewUnmountContext>
@@ -1385,7 +1408,37 @@ const ConversationTimeline = memo(function ConversationTimeline({
       </div>
     </TimelineRowCtx>
   );
-  const listExtraData = { identity: listIdentityKey, rowCount: rows.length, sharedState };
+  const listExtraData = {
+    identity: listIdentityKey,
+    rowCount: rows.length,
+    sharedState,
+    catchUpRowId: timelineCatchUp?.rowId ?? null,
+  };
+  const jumpToCatchUp = useStableCallback((opening: boolean) => {
+    const index = timelineCatchUp ? rows.findIndex((row) => row.id === timelineCatchUp.rowId) : -1;
+    if (index < 0) return;
+    navigateTimeline();
+    void listRef.current?.scrollToIndex({
+      index,
+      animated: !opening && !prefersReducedMotion,
+      // The bar stays over the timeline when the thread opens; keep the line below it.
+      viewOffset: TIMELINE_MINIMAP_TARGET_OFFSET + (opening ? CATCH_UP_BAR_CLEARANCE : 0),
+    });
+    if (!opening) catchUp?.onJumped();
+  });
+  // A thread with missed answers opens at its "New" line, once, after the list first settles.
+  const catchUpOpenedForRef = useRef<string | null>(null);
+  const opensAtCatchUp =
+    timelineCatchUp !== null &&
+    settlingListIdentity === null &&
+    citationRequest === null &&
+    !findActive;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- scrolls the list, outside React, to the "New" line when a thread opens
+  useEffect(() => {
+    if (!opensAtCatchUp || catchUpOpenedForRef.current === listIdentityKey) return;
+    catchUpOpenedForRef.current = listIdentityKey;
+    jumpToCatchUp(true);
+  }, [opensAtCatchUp, listIdentityKey, jumpToCatchUp]);
   const timelineListFooter = (
     <TimelineListFooter
       composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment}
@@ -1447,6 +1500,14 @@ const ConversationTimeline = memo(function ConversationTimeline({
             className="relative h-full min-h-0"
             data-assistant-citation-viewport="true"
           >
+            {catchUp?.barVisible && timelineCatchUp !== null ? (
+              <ThreadCatchUpBar
+                answerCount={timelineCatchUp.answerCount}
+                boundary={catchUp.window.boundary}
+                onJump={() => jumpToCatchUp(false)}
+                onMarkRead={catchUp.onMarkRead}
+              />
+            ) : null}
             {onCiteAssistantText && citationThreadRef ? (
               <AssistantSelectionToolbar
                 viewport={timelineViewportElement}

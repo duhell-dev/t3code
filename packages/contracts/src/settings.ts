@@ -1373,6 +1373,16 @@ export const CloudSpeechCredentials = Schema.Struct({
   openrouter: CloudSpeechCredential,
 });
 
+/**
+ * How long an idle thread collects delegated task completions and agent messages before one
+ * run answers them all. 0 starts a run for each, as before. A person's message never waits.
+ */
+export const MAX_AGENT_INPUT_QUIET_SECONDS = 600;
+const DEFAULT_AGENT_INPUT_QUIET_SECONDS = 90;
+export const AgentInputQuietSeconds = Schema.Int.check(
+  Schema.isBetween({ minimum: 0, maximum: MAX_AGENT_INPUT_QUIET_SECONDS }),
+);
+
 export const ServerSettings = Schema.Struct({
   // Null means unmigrated; empty is authoritative and must not resurrect cleared preferences.
   favorites: Schema.NullOr(ModelFavorites).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -1400,6 +1410,9 @@ export const ServerSettings = Schema.Struct({
   ),
   /** Holds an OS sleep inhibitor while any run is active; closing a laptop lid still sleeps it. */
   keepAwakeWhileAgentsWork: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  agentInputQuietSeconds: AgentInputQuietSeconds.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_AGENT_INPUT_QUIET_SECONDS)),
+  ),
   /** New T3 Connect device keys wait for approval from someone already trusted here. */
   requireConnectDeviceApproval: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
@@ -1890,6 +1903,7 @@ export const ServerSettingsPatch = Schema.Struct({
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   continueThreadsAfterServerUpdate: Schema.optionalKey(Schema.Boolean),
   keepAwakeWhileAgentsWork: Schema.optionalKey(Schema.Boolean),
+  agentInputQuietSeconds: Schema.optionalKey(AgentInputQuietSeconds),
   requireConnectDeviceApproval: Schema.optionalKey(Schema.Boolean),
   enableAgentBrowserAccess: Schema.optionalKey(Schema.Boolean),
   enablePreviewTunnel: Schema.optionalKey(Schema.Boolean),

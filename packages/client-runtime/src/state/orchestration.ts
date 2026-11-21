@@ -2,6 +2,7 @@ import { msg } from "gt-i18n";
 import { translatableMessage } from "../errors/translatable.ts";
 import {
   ORCHESTRATION_V2_WS_METHODS,
+  THREAD_CATCH_UP_WS_METHOD,
   type EnvironmentId,
   type ThreadId,
   type OrchestrationV2ThreadLinkMetadata,
@@ -225,6 +226,10 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       tag: ORCHESTRATION_V2_WS_METHODS.searchThread,
       staleTimeMs: 0,
       idleTtlMs: 0,
+    }),
+    threadCatchUp: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:orchestration:thread-catch-up",
+      tag: THREAD_CATCH_UP_WS_METHOD,
     }),
     threadFindProgressive: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:orchestration:thread-find-progressive",

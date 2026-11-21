@@ -4105,6 +4105,16 @@
       "v": "v"
     }
   ],
+  "573dfa61a3862a2e": "{count, plural, one {{count} neue Antwort seit deinem letzten Blick ({time})} other {{count} neue Antworten seit deinem letzten Blick ({time})}}",
+  "6160a489c4bfb7e4": "Zum Neuen springen",
+  "b8736743b1ab48f3": "Als gelesen markieren",
+  "46a0f0c938cbe0a0": "Neu · seit {time}",
+  "9f4b9c49a0596782": "Seit deinem letzten Besuch",
+  "e5f264dab0a413ee": "{count, plural, one {· {count} Antwort} other {· {count} Antworten}}",
+  "d647b9399a8bbbaf": "{count, plural, one {· {count} Antwort · zusammengefasst von {model}} other {· {count} Antworten · zusammengefasst von {model}}}",
+  "3625e33343c1bdb5": "Für dich zu tun: {count}",
+  "f888faa26b571974": "Diesmal keine Zusammenfassung: {error}",
+  "6d71573f92014041": "Fasse zusammen …",
   "e58a1d884fa1d8f2": "Thread-Details",
   "43c5fbd02c6f330a": "Weniger anzeigen",
   "de45b075b016cb14": [
@@ -11935,6 +11945,7 @@
   "9d9d32b401d2931a": "{count, plural, one {{count} Terminal-Prozess läuft} other {{count} Terminal-Prozesse laufen}}",
   "ade06f6723949b39": "Fehler aufgetreten",
   "021fe65858278fe9": "Thread zurückstellen",
+  "03ee82a54a9633b1": "{count, plural, one {{count} neue Antwort} other {{count} neue Antworten}}",
   "e7c18f33bc1326f7": "Wird eingerichtet",
   "26375cafb52d0503": "Ziel",
   "ad78fae7d373cf21": "Arbeitet",

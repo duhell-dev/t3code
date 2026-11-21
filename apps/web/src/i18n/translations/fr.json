@@ -4102,6 +4102,16 @@
       "v": "v"
     }
   ],
+  "573dfa61a3862a2e": "{count, plural, one {{count} nouvelle réponse depuis votre dernière visite ({time})} other {{count} nouvelles réponses depuis votre dernière visite ({time})}}",
+  "6160a489c4bfb7e4": "Aller aux nouveautés",
+  "b8736743b1ab48f3": "Marquer comme lu",
+  "46a0f0c938cbe0a0": "Nouveau · depuis {time}",
+  "9f4b9c49a0596782": "Depuis votre dernière visite",
+  "e5f264dab0a413ee": "{count, plural, one {· {count} réponse} other {· {count} réponses}}",
+  "d647b9399a8bbbaf": "{count, plural, one {· {count} réponse · résumée par {model}} other {· {count} réponses · résumées par {model}}}",
+  "3625e33343c1bdb5": "À faire pour vous : {count}",
+  "f888faa26b571974": "Pas de résumé cette fois : {error}",
+  "6d71573f92014041": "Résumé en cours…",
   "e58a1d884fa1d8f2": "Détails du fil",
   "43c5fbd02c6f330a": "Afficher moins",
   "de45b075b016cb14": [
@@ -11933,6 +11943,7 @@
   "9d9d32b401d2931a": "{count, plural, one {{count} processus de terminal en cours} other {{count} processus de terminal en cours}}",
   "ade06f6723949b39": "Une erreur s’est produite",
   "021fe65858278fe9": "Reporter le fil",
+  "03ee82a54a9633b1": "{count, plural, one {{count} nouvelle réponse} other {{count} nouvelles réponses}}",
   "e7c18f33bc1326f7": "Configuration",
   "26375cafb52d0503": "Objectif",
   "ad78fae7d373cf21": "En cours",

@@ -4101,6 +4101,16 @@
       "v": "v"
     }
   ],
+  "573dfa61a3862a2e": "{count, plural, one {{count} respuesta nueva desde tu última visita ({time})} other {{count} respuestas nuevas desde tu última visita ({time})}}",
+  "6160a489c4bfb7e4": "Ir a lo nuevo",
+  "b8736743b1ab48f3": "Marcar como leído",
+  "46a0f0c938cbe0a0": "Nuevo · desde las {time}",
+  "9f4b9c49a0596782": "Desde tu última visita",
+  "e5f264dab0a413ee": "{count, plural, one {· {count} respuesta} other {· {count} respuestas}}",
+  "d647b9399a8bbbaf": "{count, plural, one {· {count} respuesta · resumida por {model}} other {· {count} respuestas · resumidas por {model}}}",
+  "3625e33343c1bdb5": "Pendiente para ti: {count}",
+  "f888faa26b571974": "Esta vez no hay resumen: {error}",
+  "6d71573f92014041": "Resumiendo…",
   "e58a1d884fa1d8f2": "Detalles del hilo",
   "43c5fbd02c6f330a": "Mostrar menos",
   "de45b075b016cb14": [
@@ -11928,6 +11938,7 @@
   "9d9d32b401d2931a": "{count, plural, one {{count} proceso de terminal en ejecución} other {{count} procesos de terminal en ejecución}}",
   "ade06f6723949b39": "Se produjo un error",
   "021fe65858278fe9": "Posponer hilo",
+  "03ee82a54a9633b1": "{count, plural, one {{count} respuesta nueva} other {{count} respuestas nuevas}}",
   "e7c18f33bc1326f7": "Preparando",
   "26375cafb52d0503": "Objetivo",
   "ad78fae7d373cf21": "Trabajando",

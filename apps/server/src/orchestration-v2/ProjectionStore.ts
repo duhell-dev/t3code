@@ -1267,6 +1267,7 @@ type ShellThreadRow = {
   readonly pending_link_request_payload_json: string | null;
   readonly latest_user_message_at: string | null;
   readonly latest_user_authored_message_at: string | null;
+  readonly unread_message_count: number;
   readonly has_actionable_proposed_plan: number;
 };
 
@@ -1967,6 +1968,7 @@ export function threadShellFromProjection(
     latestVisibleMessage: null,
     latestUserMessageAt: latestUserMessage?.updatedAt ?? null,
     latestUserAuthoredMessageAt,
+    unreadMessageCount: unreadMessageCount(projection.messages, projection.thread.lastVisitedAt),
     hasActionableProposedPlan: projection.plans.some(
       (plan) => plan.kind === "proposed_plan" && plan.status === "active",
     ),
@@ -2099,6 +2101,7 @@ type ShellThreadState = {
   readonly pendingRuntimeRequest: OrchestrationV2PendingRuntimeRequestSummary | null;
   readonly latestUserMessageAt: DateTime.Utc | null;
   readonly latestUserAuthoredMessageAt: DateTime.Utc | null;
+  readonly unreadMessageCount: number;
   readonly hasActionableProposedPlan: boolean;
   readonly pendingBackgroundTasks: OrchestrationV2ThreadShell["pendingBackgroundTasks"];
   readonly providerInstanceHistory: OrchestrationV2ThreadShell["providerInstanceHistory"];
@@ -2214,6 +2217,20 @@ function visibleItemCountForShell(input: {
   );
 }
 
+/** Answers since the last visit: one per run with assistant text, as the shell query counts them. */
+function unreadMessageCount(
+  messages: ReadonlyArray<OrchestrationV2ConversationMessage>,
+  lastVisitedAt: DateTime.Utc | null,
+): number {
+  if (lastVisitedAt === null) return 0;
+  const answers = new Set<string>();
+  for (const message of messages) {
+    if (message.role === "assistant" && DateTime.isGreaterThan(message.createdAt, lastVisitedAt))
+      answers.add(message.runId ?? message.id);
+  }
+  return answers.size;
+}
+
 function shellFromState(input: {
   readonly state: ShellThreadState;
   readonly visibleItemCount: number;
@@ -2273,6 +2290,7 @@ function shellFromState(input: {
     latestVisibleMessage: null,
     latestUserMessageAt: input.state.latestUserMessageAt,
     latestUserAuthoredMessageAt: input.state.latestUserAuthoredMessageAt,
+    unreadMessageCount: input.state.unreadMessageCount,
     hasActionableProposedPlan: input.state.hasActionableProposedPlan,
     pendingBackgroundTasks: input.state.pendingBackgroundTasks,
     providerInstanceHistory: input.state.providerInstanceHistory,
@@ -8473,6 +8491,13 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
                 ORDER BY message.updated_at DESC, message.message_id DESC
                 LIMIT 1
               ) AS latest_user_authored_message_at,
+              (
+                SELECT COUNT(DISTINCT COALESCE(message.run_id, message.message_id))
+                FROM orchestration_v2_projection_messages message
+                WHERE message.thread_id = t.thread_id
+                  AND message.role = 'assistant'
+                  AND message.created_at > json_extract(t.payload_json, '$.lastVisitedAt')
+              ) AS unread_message_count,
               EXISTS (
                 SELECT 1
                 FROM orchestration_v2_projection_plans plan
@@ -9132,6 +9157,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
               ? null
               : DateTime.makeUnsafe(row.latest_user_message_at),
           latestUserAuthoredMessageAt,
+          unreadMessageCount: row.unread_message_count,
           hasActionableProposedPlan: row.has_actionable_proposed_plan === 1,
           pendingBackgroundTasks,
           providerInstanceHistory: providerInstanceHistoryForShell({

@@ -11,6 +11,7 @@ import {
   deleteSelectedThreadEntries,
   getFallbackThreadIdAfterDelete,
   hasUnseenCompletion,
+  sidebarUnreadCount,
   orderItemsByPreferredIds,
   pinOrderKeyBetween,
   resolveSidebarSweepKeys,
@@ -1702,5 +1703,35 @@ describe("shouldCreateNewThreadInCurrentProject", () => {
     expect(shouldCreateNewThreadInCurrentProject(false, 1, 3)).toBe(true);
     expect(shouldCreateNewThreadInCurrentProject(false, 0, 0)).toBe(true);
     expect(shouldCreateNewThreadInCurrentProject(true, 2, 2)).toBe(true);
+  });
+});
+
+describe("sidebarUnreadCount", () => {
+  const thread = {
+    unreadMessageCount: 4,
+    updatedAt: "2026-01-01T12:00:00.000Z",
+    lastVisitedAt: "2026-01-01T10:00:00.000Z",
+    serverLastVisitedAt: "2026-01-01T10:00:00.000Z",
+  };
+  it.each([
+    { name: "counts the server's answers", input: thread, count: 4 },
+    { name: "hides without a visit mark", input: { ...thread, lastVisitedAt: null }, count: 0 },
+    {
+      name: "hides once a visit reaches the last change",
+      input: { ...thread, lastVisitedAt: thread.updatedAt },
+      count: 0,
+    },
+    {
+      name: "hides when a newer local visit read them",
+      input: { ...thread, lastVisitedAt: "2026-01-01T11:00:00.000Z" },
+      count: 0,
+    },
+    {
+      name: "older servers send no count",
+      input: { ...thread, unreadMessageCount: undefined },
+      count: 0,
+    },
+  ])("$name", ({ input, count }) => {
+    expect(sidebarUnreadCount(input)).toBe(count);
   });
 });

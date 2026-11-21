@@ -206,6 +206,8 @@ export interface EnvironmentThreadShell {
    * local visited state they keep.
    */
   readonly lastVisitedAt?: string | null;
+  /** Answers since the visit mark, counted by the server; absent from servers that do not count. */
+  readonly unreadMessageCount?: number;
   /** Server-tracked open history for search ranking. */
   readonly opens?: import("@t3tools/contracts").OrchestrationV2ThreadOpens | null;
   readonly titleRegeneration?: { readonly requestId: string; readonly startedAt: string } | null;
@@ -356,6 +358,9 @@ export function presentThreadShell(
     ...(thread.lastVisitedAt === undefined
       ? {}
       : { lastVisitedAt: nullableIso(thread.lastVisitedAt) }),
+    ...(thread.unreadMessageCount === undefined
+      ? {}
+      : { unreadMessageCount: thread.unreadMessageCount }),
     opens: thread.opens ?? null,
     titleRegeneration:
       thread.titleRegeneration == null

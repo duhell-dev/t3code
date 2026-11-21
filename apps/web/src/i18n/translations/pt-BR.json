@@ -4102,6 +4102,16 @@
       "v": "v"
     }
   ],
+  "573dfa61a3862a2e": "{count, plural, one {{count} resposta nova desde a sua última visita ({time})} other {{count} respostas novas desde a sua última visita ({time})}}",
+  "6160a489c4bfb7e4": "Ir para o novo",
+  "b8736743b1ab48f3": "Marcar como lido",
+  "46a0f0c938cbe0a0": "Novo · desde {time}",
+  "9f4b9c49a0596782": "Desde a sua última visita",
+  "e5f264dab0a413ee": "{count, plural, one {· {count} resposta} other {· {count} respostas}}",
+  "d647b9399a8bbbaf": "{count, plural, one {· {count} resposta · resumida por {model}} other {· {count} respostas · resumidas por {model}}}",
+  "3625e33343c1bdb5": "Para você fazer: {count}",
+  "f888faa26b571974": "Sem resumo desta vez: {error}",
+  "6d71573f92014041": "Resumindo…",
   "e58a1d884fa1d8f2": "Detalhes da thread",
   "43c5fbd02c6f330a": "Mostrar menos",
   "de45b075b016cb14": [
@@ -11932,6 +11942,7 @@
   "9d9d32b401d2931a": "{count, plural, one {{count} processo de terminal em execução} other {{count} processos de terminal em execução}}",
   "ade06f6723949b39": "Ocorreu um erro",
   "021fe65858278fe9": "Adiar thread",
+  "03ee82a54a9633b1": "{count, plural, one {{count} resposta nova} other {{count} respostas novas}}",
   "e7c18f33bc1326f7": "Configurando",
   "26375cafb52d0503": "Meta",
   "ad78fae7d373cf21": "Trabalhando",

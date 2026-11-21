@@ -4090,6 +4090,16 @@
       "v": "v"
     }
   ],
+  "573dfa61a3862a2e": "{count, plural, other {마지막 확인 이후 새 답변 {count}개 ({time})}}",
+  "6160a489c4bfb7e4": "새 항목으로 이동",
+  "b8736743b1ab48f3": "읽음으로 표시",
+  "46a0f0c938cbe0a0": "새 항목 · {time} 이후",
+  "9f4b9c49a0596782": "마지막 방문 이후",
+  "e5f264dab0a413ee": "{count, plural, other {· 답변 {count}개}}",
+  "d647b9399a8bbbaf": "{count, plural, other {· 답변 {count}개 · {model} 요약}}",
+  "3625e33343c1bdb5": "해야 할 일: {count}",
+  "f888faa26b571974": "이번에는 요약이 없습니다: {error}",
+  "6d71573f92014041": "요약 중…",
   "e58a1d884fa1d8f2": "스레드 세부 정보",
   "43c5fbd02c6f330a": "간략히 보기",
   "de45b075b016cb14": [
@@ -11880,6 +11890,7 @@
   "9d9d32b401d2931a": "{count, plural, other {터미널 프로세스 {count}개 실행 중}}",
   "ade06f6723949b39": "오류가 발생했습니다",
   "021fe65858278fe9": "스레드 다시 알림",
+  "03ee82a54a9633b1": "{count, plural, other {새 답변 {count}개}}",
   "e7c18f33bc1326f7": "설정 중",
   "26375cafb52d0503": "목표",
   "ad78fae7d373cf21": "작업 중",

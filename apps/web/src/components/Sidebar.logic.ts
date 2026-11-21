@@ -783,6 +783,24 @@ export function hasUnseenCompletion(thread: ThreadStatusInput): boolean {
   return completedAt > lastVisitedAt;
 }
 
+/**
+ * New answers to show on a row. The server counts against its own visit mark; a newer
+ * local mark, or one past the thread's last change, means they were read since.
+ */
+export function sidebarUnreadCount(thread: {
+  readonly unreadMessageCount?: number | undefined;
+  readonly updatedAt: string;
+  readonly lastVisitedAt?: string | null | undefined;
+  readonly serverLastVisitedAt?: string | null | undefined;
+}): number {
+  const count = thread.unreadMessageCount ?? 0;
+  if (count === 0 || !thread.lastVisitedAt) return 0;
+  const visitedAt = Date.parse(thread.lastVisitedAt);
+  if (visitedAt >= Date.parse(thread.updatedAt)) return 0;
+  const serverVisitedAt = thread.serverLastVisitedAt ? Date.parse(thread.serverLastVisitedAt) : NaN;
+  return Number.isNaN(serverVisitedAt) || visitedAt <= serverVisitedAt ? count : 0;
+}
+
 // Suppress trailing double-click navigation; keyboard and synthetic clicks use detail 0.
 export function isTrailingDoubleClick(detail: number): boolean {
   return detail > 1;
