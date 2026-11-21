@@ -65,6 +65,8 @@ export interface VerifiedSession {
   readonly runtimeModeCeiling?: RuntimeMode;
   /** An MCP client that is another T3 Code environment's peer link. */
   readonly peerLink?: true;
+  /** duhell: the session row, not the token, holds the deadline, so the session can be extended. */
+  readonly rowHoldsDeadline?: true;
 }
 
 export interface VerifiedWebSocketTicket extends VerifiedSession {
@@ -416,6 +418,8 @@ export class SessionStore extends Context.Service<
       readonly replaceSessionId?: AuthSessionId;
       /** Keeps the session alive this long past each renewal; `ttl` then bounds only the token. */
       readonly renewalWindow?: Duration.Duration;
+      /** duhell: the session row holds the deadline, so `extend` keeps the same token valid. */
+      readonly rowHoldsDeadline?: boolean;
     }) => Effect.Effect<IssuedSession, SessionCredentialInternalError>;
     /** Trades a renewable token, even an expired one, for a fresh token on the same session. */
     readonly renew: (
@@ -505,6 +509,8 @@ const SessionClaims = Schema.Struct({
   plk: Schema.optionalKey(Schema.Literal(1)),
   /** Signed, so only sessions issued as renewable can renew. */
   rnw: Schema.optionalKey(Schema.Literal(1)),
+  /** duhell: signed, so only sessions issued that way are extended past their token's expiry. */
+  rhd: Schema.optionalKey(Schema.Literal(1)),
   iat: Schema.Number,
   exp: Schema.Number,
 });
@@ -749,6 +755,7 @@ const make = Effect.gen(function* () {
         ...(input?.runtimeModeCeiling ? { rtc: input.runtimeModeCeiling } : {}),
         ...(input?.peerLink === true ? { plk: 1 as const } : {}),
         ...(input?.renewalWindow ? { rnw: 1 as const } : {}),
+        ...(input?.rowHoldsDeadline === true ? { rhd: 1 as const } : {}),
         iat: issuedAt.epochMilliseconds,
         exp: expiresAt.epochMilliseconds,
       };
@@ -884,7 +891,7 @@ const make = Effect.gen(function* () {
       }
       // A peer link's session renews while it is used and its token is never
       // reissued, so the session row holds its deadline, not the token.
-      const rowHoldsDeadline = claims.plk === 1;
+      const rowHoldsDeadline = claims.plk === 1 || claims.rhd === 1;
       if (!rowHoldsDeadline && claims.exp <= observedAt.epochMilliseconds) {
         return yield* new SessionTokenExpiredError({
           sessionId: claims.sid,
@@ -931,6 +938,7 @@ const make = Effect.gen(function* () {
         ...(claims.jkt ? { proofKeyThumbprint: claims.jkt } : {}),
         ...(claims.rtc ? { runtimeModeCeiling: claims.rtc } : {}),
         ...(claims.plk === 1 ? { peerLink: true as const } : {}),
+        ...(rowHoldsDeadline ? { rowHoldsDeadline: true as const } : {}),
       } satisfies VerifiedSession;
     },
   );

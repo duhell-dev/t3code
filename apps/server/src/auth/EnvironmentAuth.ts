@@ -88,6 +88,9 @@ const MCP_CLIENT_SESSION_TTL = Duration.days(30);
 // A peer link's session moves back out to its full lifetime when a call finds it this far
 // short, so a used link never expires and a busy one writes at most once per step.
 const PEER_LINK_RENEWAL_STEP = Duration.days(1);
+// duhell: a browser session in use moves this far out, at most once per step.
+const BROWSER_SESSION_TTL = Duration.days(30);
+const BROWSER_SESSION_RENEWAL_STEP = Duration.days(1);
 
 // A device pairing with its DPoP key renews the session itself, so the token can be short and
 // the device stays signed in while used. One idle for the whole window pairs again.
@@ -499,6 +502,13 @@ export class EnvironmentAuth extends Context.Service<
     readonly getSessionState: (
       request: HttpServerRequest.HttpServerRequest,
     ) => Effect.Effect<AuthSessionState, ServerAuthInternalError>;
+    /**
+     * duhell: the later expiry of a browser cookie session in use, when it was issued to renew and
+     * this use finds it a day short of 30 days out. None for any other credential.
+     */
+    readonly renewBrowserSession: (
+      token: string,
+    ) => Effect.Effect<Option.Option<DateTime.Utc>, ServerAuthInternalError>;
     readonly createBrowserSession: (
       credential: string,
       requestMetadata: AuthClientMetadata,
@@ -978,6 +988,8 @@ export const make = Effect.gen(function* () {
         method: "browser-session-cookie",
         subject: grant.subject,
         scopes: grant.scopes,
+        // duhell: the row holds the deadline, so a session in use renews (renewBrowserSession).
+        rowHoldsDeadline: true,
         ...(previousSession?.method === "browser-session-cookie"
           ? { replaceSessionId: previousSession.sessionId }
           : {}),
@@ -1606,6 +1618,35 @@ export const make = Effect.gen(function* () {
     return current.value;
   });
 
+  const renewBrowserSession: EnvironmentAuth["Service"]["renewBrowserSession"] = Effect.fn(
+    "EnvironmentAuth.renewBrowserSession",
+  )(
+    function* (token) {
+      const session = yield* sessions.verify(token).pipe(Effect.option);
+      if (
+        Option.isNone(session) ||
+        session.value.method !== "browser-session-cookie" ||
+        session.value.rowHoldsDeadline !== true ||
+        session.value.expiresAt === undefined
+      ) {
+        return Option.none();
+      }
+      const now = yield* DateTime.now;
+      const renewed = DateTime.add(now, { milliseconds: Duration.toMillis(BROWSER_SESSION_TTL) });
+      const expiresAt = session.value.expiresAt;
+      if (
+        DateTime.distance(expiresAt, renewed).pipe(
+          Duration.isLessThan(BROWSER_SESSION_RENEWAL_STEP),
+        )
+      ) {
+        return Option.none();
+      }
+      // None when a revoke landed in between, or another request already moved it.
+      return yield* sessions.extend(session.value.sessionId, renewed, BROWSER_SESSION_RENEWAL_STEP);
+    },
+    Effect.mapError((cause) => new ServerAuthSessionCredentialValidationError({ cause })),
+  );
+
   const authenticateMcpClient: EnvironmentAuth["Service"]["authenticateMcpClient"] = (request) => {
     const token = parseBearerToken(request);
     if (token === null) return Effect.fail(new ServerAuthMissingCredentialError({}));
@@ -1693,6 +1734,7 @@ export const make = Effect.gen(function* () {
       return Effect.succeed(descriptor);
     }),
     getSessionState,
+    renewBrowserSession,
     createBrowserSession,
     exchangeBootstrapCredentialForAccessToken,
     renewAccessToken,

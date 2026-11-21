@@ -307,6 +307,22 @@ export const layer = HttpApiBuilder.group(
                 result.expiresAt,
               );
               yield* appendCredentialResponseHeaders;
+            } else if (
+              credential?.source === "cookie" &&
+              result.authenticated &&
+              result.sessionMethod === "browser-session-cookie"
+            ) {
+              // duhell: a browser in use keeps its session; the cookie moves out with it.
+              const renewed = yield* serverAuth.renewBrowserSession(credential.token);
+              if (Option.isSome(renewed)) {
+                yield* appendSessionCookie(
+                  request,
+                  sessions.cookieName,
+                  credential.token,
+                  renewed.value,
+                );
+                yield* appendCredentialResponseHeaders;
+              }
             }
             return result;
           },

@@ -591,6 +591,60 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodePlatformCrypto.layer))(
       }).pipe(Effect.provide(layerEnvironmentAuth({ mode: "web", host: "192.168.1.50" }))),
     );
 
+    // duhell: a browser that keeps using its cookie stays signed in.
+    it.effect("renews a browser cookie session while it is used, and not past a revoke", () =>
+      Effect.gen(function* () {
+        const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+        const sessions = yield* SessionStore.SessionStore;
+        const day = 24 * 60 * 60 * 1000;
+        const signIn = Effect.gen(function* () {
+          const pairing = yield* serverAuth.issuePairingCredential({
+            scopes: ["orchestration:read"],
+          });
+          return yield* serverAuth.createBrowserSession(pairing.credential, requestMetadata);
+        });
+        const renew = (token: string) =>
+          serverAuth
+            .renewBrowserSession(token)
+            .pipe(
+              Effect.map((renewed) =>
+                renewed._tag === "Some" ? renewed.value.epochMilliseconds : null,
+              ),
+            );
+        const valid = (token: string) =>
+          sessions.verify(token).pipe(
+            Effect.as(true),
+            Effect.orElseSucceed(() => false),
+          );
+        const issuedAt = (yield* DateTime.now).epochMilliseconds;
+        const used = (yield* signIn).sessionToken;
+        const idle = (yield* signIn).sessionToken;
+        const revoked = (yield* signIn).sessionToken;
+
+        // Within a day of its full lifetime, a use leaves the session alone.
+        yield* TestClock.adjust("12 hours");
+        expect(yield* renew(used)).toBeNull();
+
+        yield* TestClock.adjust("468 hours");
+        expect(yield* renew(used)).toBe(issuedAt + 50 * day);
+        expect(yield* renew(used)).toBeNull();
+        const revokedSession = yield* sessions.verify(revoked);
+        expect(yield* serverAuth.revokeSession(revokedSession.sessionId)).toBe(true);
+        expect(yield* renew(revoked)).toBeNull();
+
+        // Day 40: past the token's own 30 days, so only the renewal keeps the used cookie valid.
+        yield* TestClock.adjust("20 days");
+        expect(yield* valid(used)).toBe(true);
+        expect(yield* valid(idle)).toBe(false);
+        expect(yield* valid(revoked)).toBe(false);
+        expect(yield* renew(idle)).toBeNull();
+
+        // A renewed session still ends 30 days after its last renewal.
+        yield* TestClock.adjust("31 days");
+        expect(yield* valid(used)).toBe(false);
+      }).pipe(Effect.provide(layerEnvironmentAuth({ mode: "web", host: "192.168.1.50" }))),
+    );
+
     it.effect("preserves pairing grants after rejecting scopes they do not grant", () =>
       Effect.gen(function* () {
         const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
