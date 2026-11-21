@@ -17,6 +17,33 @@ import { StandalonePage, StandalonePageHeader } from "../ui/standalone-page";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { m, type MessageResolver } from "../../i18n/messages";
 
+// duhell: the server offers sign-in with the Tailscale identity its Serve vouches for.
+const TAILSCALE_SIGN_IN_PATH = "/api/auth/tailscale";
+
+/** Whether the server serving this page signs devices in through Tailscale. */
+function useTailscaleSignInAvailable(): boolean {
+  const [available, setAvailable] = useState(false);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- asks the server once whether it offers the sign-in
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`${TAILSCALE_SIGN_IN_PATH}?check=1`, { signal: AbortSignal.timeout(10_000) })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: unknown) => {
+        if (cancelled) return;
+        setAvailable(
+          typeof body === "object" &&
+            body !== null &&
+            (body as { readonly available?: unknown }).available === true,
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return available;
+}
+
 export function PairingPendingSurface() {
   const gt = useGT();
   return (
@@ -45,6 +72,7 @@ export function PairingRouteSurface({
   const [errorMessage, setErrorMessage] = useState(initialErrorMessage ?? "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const autoSubmitAttemptedRef = useRef(false);
+  const tailscaleSignIn = useTailscaleSignInAvailable();
 
   const submitCredential = async (nextCredential: string) => {
     setIsSubmitting(true);
@@ -93,6 +121,18 @@ export function PairingRouteSurface({
         title={gt("Pair with this environment")}
         description={describeAuthGate(auth.bootstrapMethods, messages)}
       />
+
+      {tailscaleSignIn ? (
+        <div className="mt-6">
+          <Button
+            disabled={isSubmitting}
+            onClick={() => window.location.assign(TAILSCALE_SIGN_IN_PATH)}
+            size="sm"
+          >
+            <T>Sign in with Tailscale</T>
+          </Button>
+        </div>
+      ) : null}
 
       <form className="mt-6 space-y-4" onSubmit={(event) => void handleSubmit(event)}>
         <div className="space-y-2">
