@@ -43,7 +43,12 @@ const forkReleasesAtom = Atom.make(
       yield* response.text,
     );
     return releases;
-  }).pipe(Effect.provide(FetchHttpClient.layer)),
+  }).pipe(
+    // GitHub's CORS preflight does not allow a traceparent header, so with tracing on the browser
+    // blocks the request and the list never arrives. GitHub has no use for the trace anyway.
+    Effect.provideService(HttpClient.TracerPropagationEnabled, false),
+    Effect.provide(FetchHttpClient.layer),
+  ),
 ).pipe(Atom.keepAlive, Atom.withLabel("fork-releases"));
 
 const NO_RELEASES: ReadonlyArray<ReleaseWithNotes> = [];
