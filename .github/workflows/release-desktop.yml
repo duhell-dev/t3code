@@ -668,7 +668,8 @@ jobs:
             echo "Signing disabled for ${{ inputs.platform }}."
           fi
 
-          vp run dist:desktop:artifact "${args[@]}"
+          # duhell: --no-cache, weil vps Cache-Tracer (fspy) unter gVisor abbricht (eigener Runner).
+          vp run --no-cache dist:desktop:artifact "${args[@]}"
 
       # The CLI was submitted without waiting so Apple reviews it while the
       # desktop builds. Notarization does not change the archive bytes, but

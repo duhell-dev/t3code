@@ -113,10 +113,12 @@ jobs:
       - name: Paketversionen setzen
         run: node scripts/update-release-package-versions.ts "${{ needs.meta.outputs.version }}"
 
+      # --no-cache: Der Cache von vp verfolgt Dateizugriffe mit fspy, und das bricht unter
+      # gVisor ab (der eigene Runner, FSPY_PAYLOAD fehlt). Ohne Cache baut vp dasselbe.
       - name: Server und Web-Client bauen
         env:
           T3CODE_TELEMETRY_CHANNEL: dev
-        run: vp run --filter t3 build
+        run: vp run --no-cache --filter t3 build
 
       # Electron-Teil für den Windows-Installer. Layout wie im Original
       # (apps/server/dist und apps/desktop/dist-electron, Artefakt-Wurzel apps/),
@@ -124,7 +126,7 @@ jobs:
       - name: Desktop-Bundle bauen
         env:
           T3CODE_TELEMETRY_CHANNEL: dev
-        run: vp run build:desktop:bundle
+        run: vp run --no-cache build:desktop:bundle
 
       - uses: actions/upload-artifact@v7
         with:
