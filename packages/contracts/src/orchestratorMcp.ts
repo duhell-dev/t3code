@@ -368,6 +368,9 @@ export const OrchestratorMcpThreadListInput = Schema.Struct({
   settled: Schema.optional(Schema.Boolean),
   snoozed: Schema.optional(Schema.Boolean),
   includeSubagents: Schema.optional(Schema.Boolean),
+  providerInstanceId: Schema.optional(
+    ProviderInstanceId.annotate({ description: "Only threads on this provider instance." }),
+  ),
   cursor: Schema.optional(NonNegativeInt),
   limit: Schema.optional(clampedPositiveInt(100)),
 });
@@ -442,6 +445,45 @@ export const OrchestratorMcpThreadListResult = Schema.Struct({
   total: NonNegativeInt,
 });
 export type OrchestratorMcpThreadListResult = typeof OrchestratorMcpThreadListResult.Type;
+
+export const OrchestratorMcpProviderActivityInput = Schema.Struct({
+  providerInstanceId: Schema.optional(ProviderInstanceId),
+});
+export type OrchestratorMcpProviderActivityInput = typeof OrchestratorMcpProviderActivityInput.Type;
+
+export const OrchestratorMcpProviderActivityThread = Schema.Struct({
+  threadId: ThreadId,
+  title: Schema.String,
+  link: Schema.optional(Schema.String),
+  status: OrchestratorMcpThreadStatus,
+  model: Schema.String,
+});
+export type OrchestratorMcpProviderActivityThread =
+  typeof OrchestratorMcpProviderActivityThread.Type;
+
+export const OrchestratorMcpProviderActivityEnvironment = Schema.Struct({
+  environmentId: EnvironmentId,
+  /** null for this environment. */
+  label: Schema.NullOr(Schema.String),
+  reachable: Schema.Boolean,
+  error: Schema.NullOr(Schema.String),
+  providers: Schema.Array(
+    Schema.Struct({
+      providerInstanceId: ProviderInstanceId,
+      threads: Schema.Array(OrchestratorMcpProviderActivityThread),
+    }),
+  ),
+  /** More live threads than one listing holds; the rest are left out. */
+  truncated: Schema.Boolean,
+});
+export type OrchestratorMcpProviderActivityEnvironment =
+  typeof OrchestratorMcpProviderActivityEnvironment.Type;
+
+export const OrchestratorMcpProviderActivityResult = Schema.Struct({
+  environments: Schema.Array(OrchestratorMcpProviderActivityEnvironment),
+});
+export type OrchestratorMcpProviderActivityResult =
+  typeof OrchestratorMcpProviderActivityResult.Type;
 
 export const OrchestratorMcpThreadReadInput = Schema.Struct({
   environmentId: OrchestratorMcpEnvironmentTarget,

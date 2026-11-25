@@ -5571,7 +5571,13 @@ describe("OrchestratorMcpService thread list", () => {
   });
   const shells = [
     shell("thread:a-snoozed", "project:a", true),
-    shell("thread:a-awake", "project:a", false),
+    {
+      ...shell("thread:a-awake", "project:a", false),
+      modelSelection: {
+        instanceId: ProviderInstanceId.make("claude-second"),
+        model: "claude-sonnet-5-5",
+      },
+    },
     shell("thread:b-snoozed", "project:b", true, true, true),
     {
       ...shell("thread:a-awaiting-command", "project:a", false),
@@ -5747,6 +5753,25 @@ describe("OrchestratorMcpService thread list", () => {
         [["thread:a-snoozed"], 3, 1],
       );
       assert.deepStrictEqual(shellRequests, [[ThreadId.make("thread:a-snoozed")]]);
+    }).pipe(Effect.provide(service)),
+  );
+
+  it.effect("lists only the threads on the provider instance it is given", () =>
+    Effect.gen(function* () {
+      const mcp = yield* OrchestratorMcpService.OrchestratorMcpService;
+      const second = yield* mcp.listThreads(client, {
+        allProjects: true,
+        providerInstanceId: ProviderInstanceId.make("claude-second"),
+      });
+      assert.deepStrictEqual(
+        [second.threads.map((thread) => thread.threadId), second.total],
+        [["thread:a-awake"], 1],
+      );
+      const none = yield* mcp.listThreads(client, {
+        allProjects: true,
+        providerInstanceId: ProviderInstanceId.make("missing"),
+      });
+      assert.equal(none.total, 0);
     }).pipe(Effect.provide(service)),
   );
 

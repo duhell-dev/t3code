@@ -883,6 +883,10 @@ const threadListCommand = Command.make("list", {
     Flag.withDescription("Project id or a path inside the project. Defaults to this directory."),
     Flag.withDefault("."),
   ),
+  provider: Flag.String("provider").pipe(
+    Flag.withDescription("Only threads on this provider instance id."),
+    Flag.optional,
+  ),
   json: jsonFlag,
 }).pipe(
   Command.withDescription("List a project's threads, newest first."),
@@ -896,7 +900,15 @@ const threadListCommand = Command.make("list", {
         while (cursor !== null) {
           const page: OrchestratorMcpThreadListResult = yield* tools.call(
             "t3_thread_list",
-            { projectId: project.id, includeSubagents: true, limit: 100, cursor },
+            {
+              projectId: project.id,
+              includeSubagents: true,
+              limit: 100,
+              cursor,
+              ...(Option.isSome(flags.provider)
+                ? { providerInstanceId: flags.provider.value }
+                : {}),
+            },
             OrchestratorMcpThreadListResult,
           );
           threads.push(

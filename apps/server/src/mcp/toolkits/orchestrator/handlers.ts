@@ -10,6 +10,7 @@ import { readCaller } from "../../threadAccess.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
+import { providerActivity } from "../../providerActivity.ts";
 import * as ThreadMetadataMcpService from "../../ThreadMetadataMcpService.ts";
 
 const handlers = {
@@ -156,6 +157,27 @@ const handlers = {
       const scope = yield* McpInvocationContext.McpInvocationContext;
       const service = yield* OrchestratorMcpService.OrchestratorMcpService;
       return yield* service.listThreads(scope, input);
+    }),
+  ),
+  t3_provider_activity: McpToolAccess.reads((input) =>
+    Effect.gen(function* () {
+      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+      const forwarding = yield* PeerForwarding.PeerForwarding;
+      return yield* providerActivity({
+        scope,
+        filter: input,
+        listHere: (listing) => service.listThreads(scope, listing),
+        linked:
+          scope.linkedEnvironments === false
+            ? Effect.succeed([])
+            : forwarding.links(scope).pipe(Effect.map(({ links }) => links)),
+        listThere: (environmentId, listing) =>
+          forwarding.call(scope, OrchestratorToolkit.tools.t3_thread_list, environmentId, {
+            ...listing,
+            environmentId,
+          }),
+      });
     }),
   ),
   t3_thread_read: McpToolAccess.reads((input) =>

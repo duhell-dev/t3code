@@ -3599,13 +3599,22 @@ const make = Effect.gen(function* () {
       const limit = input.limit ?? DEFAULT_THREAD_LIST_LIMIT;
       let page: ReadonlyArray<OrchestrationV2ThreadShell>;
       let total: number;
-      if (statuses === null && input.snoozed === undefined) {
+      if (
+        statuses === null &&
+        input.snoozed === undefined &&
+        input.providerInstanceId === undefined
+      ) {
         total = candidates.length;
         page = yield* shellsOf(candidates.slice(cursor, cursor + limit));
       } else {
-        // Status and snooze state are derived from the shell.
+        // Status, snooze state and provider instance are read from the shell.
         const filtered = (yield* shellsOf(candidates))
           .filter((thread) => statuses === null || statuses.has(listedThreadStatus(thread)))
+          .filter(
+            (thread) =>
+              input.providerInstanceId === undefined ||
+              thread.modelSelection.instanceId === input.providerInstanceId,
+          )
           .filter(
             (thread) => input.snoozed === undefined || isSnoozed(thread, nowMs) === input.snoozed,
           );

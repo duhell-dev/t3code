@@ -28,6 +28,8 @@ import {
   OrchestratorMcpThreadInterruptResult,
   OrchestratorMcpThreadListInput,
   OrchestratorMcpThreadListResult,
+  OrchestratorMcpProviderActivityInput,
+  OrchestratorMcpProviderActivityResult,
   OrchestratorMcpThreadReadInput,
   OrchestratorMcpThreadReadResult,
   OrchestratorMcpThreadSendInput,
@@ -249,6 +251,20 @@ const ThreadListTool = Tool.make("t3_thread_list", {
   .annotate(Tool.Destructive, false)
   .annotate(Tool.Idempotent, true);
 
+const ProviderActivityTool = Tool.make("t3_provider_activity", {
+  description:
+    "Live threads (queued, running, waiting) grouped by provider instance, here and on every linked environment. For checking what runs on which account before switching.",
+  parameters: OrchestratorMcpProviderActivityInput,
+  success: OrchestratorMcpProviderActivityResult,
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: linkDependencies,
+})
+  .annotate(Tool.Title, "List live threads by provider instance")
+  .annotate(Tool.Readonly, true)
+  .annotate(Tool.Destructive, false)
+  .annotate(Tool.Idempotent, true);
+
 const ThreadReadTool = Tool.make("t3_thread_read", {
   description:
     "Read any thread by id. View `messages` (default) or `activity` (all items). Newest first; older: `beforePosition=earlierPosition`; from the start: `afterPosition=-1`, then `nextPosition`. Cut-off text: `itemId`, `textOffset=nextTextOffset`. Reading a child's final result marks it delivered. In your reply, name it as its `link` verbatim.",
@@ -375,6 +391,7 @@ export const OrchestratorToolkit = Toolkit.make(
   RequestSecretTool,
   CreateThreadsTool,
   ThreadListTool,
+  ProviderActivityTool,
   ThreadReadTool,
   ThreadUpdateTool,
   ThreadSendTool,

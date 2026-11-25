@@ -96,6 +96,7 @@ it.effect("list includes delegated threads across pages and still leaves out sub
       delegatedFrom: { environmentId: "env-1", threadId: "remote", title: "Remote" },
     };
     const subagent = { ...item("child"), parentThreadId: "root", relationshipToParent: "subagent" };
+    const providerFilters: Array<unknown> = [];
     using _session = vi.spyOn(McpBridge, "mcpToolSession").mockReturnValue(
       Effect.succeed({
         call: (tool, args) => {
@@ -107,6 +108,7 @@ it.effect("list includes delegated threads across pages and still leaves out sub
               },
             });
           if (tool === "t3_thread_list") {
+            providerFilters.push(args.providerInstanceId);
             const all = args.includeSubagents ? [root, subagent, delegated] : [root];
             const cursor = Number(args.cursor);
             return Effect.succeed({
@@ -138,6 +140,18 @@ it.effect("list includes delegated threads across pages and still leaves out sub
       listed.map((entry) => entry.threadId),
       ["root", "delegated"],
     );
+    assert.deepStrictEqual(providerFilters, [undefined, undefined]);
+    yield* Command.runWith(threadCommand, { version: "0.0.0" })([
+      "list",
+      "--project",
+      projectId,
+      "--provider",
+      "codex",
+      "--json",
+      "--base-dir",
+      baseDir,
+    ]);
+    assert.deepStrictEqual(providerFilters.slice(2), ["codex", "codex"]);
   }).pipe(
     Effect.scoped,
     Effect.provide(
