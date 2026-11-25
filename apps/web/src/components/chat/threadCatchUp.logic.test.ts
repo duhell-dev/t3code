@@ -250,3 +250,36 @@ describe("deriveTimelineCatchUp", () => {
     });
   });
 });
+
+describe("a New line in history not loaded yet", () => {
+  const marksFor = (entries: ReadonlyArray<ReturnType<typeof message>>) =>
+    nextCatchUpMarks(NO_CATCH_UP_MARKS, {
+      boundary: at(10),
+      entries,
+      atEnd: false,
+      looking: true,
+      lineInView: false,
+    }).marks;
+
+  it("draws no line on the oldest loaded row while earlier history could still hold it", () => {
+    // Loaded from minute 20 on; the unread stretch began at 10, in the pages above.
+    const entries = [message(20), message(21), message(22)];
+    expect(
+      deriveTimelineCatchUp(entries.map(rowOf), entries, at(10), marksFor(entries), true),
+    ).toMatchObject({ lineRowId: null, lineAt: null, unreadCount: 3, beforeLoaded: true });
+  });
+
+  it("draws the line once the page holding its start is loaded", () => {
+    const entries = [message(5), message(12), message(20)];
+    expect(
+      deriveTimelineCatchUp(entries.map(rowOf), entries, at(10), marksFor(entries), true),
+    ).toMatchObject({ lineRowId: "m-12", unreadCount: 2, beforeLoaded: false });
+  });
+
+  it("draws the line on the first row of a thread whose whole history is loaded", () => {
+    const entries = [message(20), message(21)];
+    expect(
+      deriveTimelineCatchUp(entries.map(rowOf), entries, at(10), marksFor(entries), false),
+    ).toMatchObject({ lineRowId: "m-20", beforeLoaded: false });
+  });
+});

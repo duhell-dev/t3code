@@ -4231,7 +4231,10 @@
       "v": "v"
     }
   ],
+  "1e43a908eec86da2": "{count, plural, other {{time} 이후 새 메시지 {count}개 이상}}",
   "f9b15c6f09930dfa": "{count, plural, other {{time} 이후 새 메시지 {count}개}}",
+  "59b94f4256f284b8": "{count, plural, other {개의 새 메시지}}",
+  "56eb0aaf0376fae3": "불러오기 중지",
   "6160a489c4bfb7e4": "새 항목으로 이동",
   "b8736743b1ab48f3": "읽음으로 표시",
   "46a0f0c938cbe0a0": "새 항목 · {time} 이후",

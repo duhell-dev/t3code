@@ -4244,7 +4244,10 @@
       "v": "v"
     }
   ],
+  "1e43a908eec86da2": "{count, plural, one {Более {count} нового сообщения с {time}} few {Более {count} новых сообщений с {time}} many {Более {count} новых сообщений с {time}} other {Более {count} новых сообщений с {time}}}",
   "f9b15c6f09930dfa": "{count, plural, one {{count} новое сообщение с {time}} few {{count} новых сообщения с {time}} many {{count} новых сообщений с {time}} other {{count} новых сообщения с {time}}}",
+  "59b94f4256f284b8": "{count, plural, one {новое сообщение} few {новых сообщения} many {новых сообщений} other {новых сообщения}}",
+  "56eb0aaf0376fae3": "Остановить загрузку",
   "6160a489c4bfb7e4": "К новому",
   "b8736743b1ab48f3": "Отметить как прочитанное",
   "46a0f0c938cbe0a0": "Новое · с {time}",

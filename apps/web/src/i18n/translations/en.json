@@ -4245,7 +4245,10 @@
       "v": "v"
     }
   ],
+  "1e43a908eec86da2": "{count, plural, one {More than {count} new message since {time}} other {More than {count} new messages since {time}}}",
   "f9b15c6f09930dfa": "{count, plural, one {{count} new message since {time}} other {{count} new messages since {time}}}",
+  "59b94f4256f284b8": "{count, plural, one {new message} other {new messages}}",
+  "56eb0aaf0376fae3": "Stop loading",
   "6160a489c4bfb7e4": "Jump to new",
   "b8736743b1ab48f3": "Mark as read",
   "46a0f0c938cbe0a0": "New · since {time}",

@@ -166,7 +166,8 @@ function timelineListStateFor(identity: string): {
 }
 
 const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
-const CATCH_UP_BAR_CLEARANCE = 40;
+// Room above the New line after a jump, so the end of what was read stays in view.
+const CATCH_UP_LINE_CONTEXT = 48;
 const TIMELINE_LIST_FADE_HEADER = (
   <div className="h-[var(--workspace-titlebar-scroll-fade-height)]" />
 );
@@ -478,6 +479,20 @@ const ConversationTimeline = memo(function ConversationTimeline({
   const [settlingListIdentity, setSettlingListIdentity] = useState<string | null>(listIdentityKey);
   // The thread whose opening (the jump to its "New" line) is done for this visit.
   const [openedAtCatchUpFor, setOpenedAtCatchUpFor] = useState<string | null>(null);
+  // A jump to the "New" line that is loading earlier history until the line is loaded.
+  const [catchUpJump, setCatchUpJump] = useState<{
+    readonly identity: string;
+    readonly opening: boolean;
+  } | null>(null);
+  // Where such a jump ends: the line once loaded, or the oldest loaded row when stopped short.
+  // A new object scrolls there once.
+  const [catchUpLanding, setCatchUpLanding] = useState<{
+    readonly identity: string;
+    readonly opening: boolean;
+    readonly at: "line" | "top";
+  } | null>(null);
+  // The oldest loaded entry when the jump last asked for a page; the next waits for it to move.
+  const catchUpPageRequestedAtRef = useRef<string | null>(null);
   const [playingAudioRows, setPlayingAudioRows] = useState<ReadonlyMap<HTMLAudioElement, string>>(
     () => new Map(),
   );
@@ -501,6 +516,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
     setSettlingListIdentity(listIdentityKey);
     // A thread left before it finished opening must not count as opened when it comes back.
     setOpenedAtCatchUpFor(null);
+    setCatchUpJump(null);
+    setCatchUpLanding(null);
     // A viewer pinned in another thread must not keep live follow off here,
     // nor when that thread comes back.
     setFullscreenAppRowId(null);
@@ -810,6 +827,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     lineInView: readerPositioned && readerView.lineInView,
     rows,
     entries: timelineEntries,
+    hasOlderHistory: historyControls?.hasMoreHistory === true,
   });
   const timelineCatchUp = reading.catchUp;
   const catchUpLineRowId = timelineCatchUp?.lineRowId ?? null;
@@ -1514,20 +1532,80 @@ const ConversationTimeline = memo(function ConversationTimeline({
   };
   const catchUpLineIndex =
     catchUpLineRowId === null ? -1 : rows.findIndex((row) => row.id === catchUpLineRowId);
-  const jumpToCatchUp = useStableCallback((opening: boolean) => {
+  const scrollToCatchUpLine = useStableCallback((opening: boolean) => {
     if (catchUpLineIndex < 0) return;
     navigateTimeline();
     void listRef.current?.scrollToIndex({
       index: catchUpLineIndex,
       animated: !opening && !prefersReducedMotion,
-      // The bar stays over the timeline until the reader reaches the end; keep the line below it.
-      viewOffset: TIMELINE_MINIMAP_TARGET_OFFSET + CATCH_UP_BAR_CLEARANCE,
+      viewOffset: TIMELINE_MINIMAP_TARGET_OFFSET + CATCH_UP_LINE_CONTEXT,
     });
   });
+  const scrollToOldestLoaded = useStableCallback(() => {
+    navigateTimeline();
+    void listRef.current?.scrollToIndex({ index: 0, animated: false });
+  });
+  const catchUpBeforeLoaded = timelineCatchUp?.beforeLoaded === true;
+  const activeCatchUpJump = catchUpJump?.identity === listIdentityKey ? catchUpJump : null;
+  const historyLoading = historyControls?.loading === true;
+  const historyError = historyControls?.error ?? null;
+  const loadEarlier = historyControls?.onLoadEarlier;
+  // A line in unloaded history loads earlier pages first; the jump lands once the line is loaded.
+  const jumpToCatchUp = useStableCallback((opening: boolean) => {
+    if (!catchUpBeforeLoaded) {
+      scrollToCatchUpLine(opening);
+      return;
+    }
+    if (activeCatchUpJump !== null) return;
+    catchUpPageRequestedAtRef.current = null;
+    setCatchUpJump({ identity: listIdentityKey, opening });
+  });
+  if (activeCatchUpJump !== null) {
+    if (
+      timelineCatchUp === null ||
+      timelineCatchUp.unreadCount === 0 ||
+      historyError !== null ||
+      loadEarlier === undefined
+    ) {
+      setCatchUpJump(null);
+      if (activeCatchUpJump.opening) setOpenedAtCatchUpFor(listIdentityKey);
+    } else if (!catchUpBeforeLoaded) {
+      setCatchUpJump(null);
+      setCatchUpLanding({
+        identity: listIdentityKey,
+        opening: activeCatchUpJump.opening,
+        at: "line",
+      });
+    }
+  }
+  const stopCatchUpJump = () => {
+    if (activeCatchUpJump === null) return;
+    setCatchUpJump(null);
+    // Stopped short of the line: show the oldest loaded unread rather than the end, which reads all.
+    setCatchUpLanding({ identity: listIdentityKey, opening: activeCatchUpJump.opening, at: "top" });
+  };
+  const oldestEntryAt = timelineEntries[0]?.createdAt ?? "";
+  const pagingCatchUp = activeCatchUpJump !== null && catchUpBeforeLoaded;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- asks the server for earlier history, one page per step, until the New line is loaded
+  useEffect(() => {
+    if (!pagingCatchUp || historyLoading || loadEarlier === undefined) return;
+    if (catchUpPageRequestedAtRef.current === oldestEntryAt) return;
+    catchUpPageRequestedAtRef.current = oldestEntryAt;
+    loadEarlier();
+  }, [pagingCatchUp, historyLoading, loadEarlier, oldestEntryAt]);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- scrolls the list, outside React, to the New line a paging jump loaded
+  useEffect(() => {
+    if (catchUpLanding === null || catchUpLanding.identity !== listIdentityKey) return;
+    if (catchUpLanding.at === "line") scrollToCatchUpLine(catchUpLanding.opening);
+    else scrollToOldestLoaded();
+    if (!catchUpLanding.opening) return;
+    const frame = requestAnimationFrame(() => setOpenedAtCatchUpFor(listIdentityKey));
+    return () => cancelAnimationFrame(frame);
+  }, [catchUpLanding, listIdentityKey, scrollToCatchUpLine, scrollToOldestLoaded]);
   // A thread with unread messages opens at its "New" line, once, after the list first settles.
   const opensAtCatchUp =
     (timelineCatchUp?.unreadCount ?? 0) > 0 &&
-    catchUpLineIndex >= 0 &&
+    (catchUpLineIndex >= 0 || catchUpBeforeLoaded) &&
     citationRequest === null &&
     !findActive;
   const listSettled = settlingListIdentity === null && !restoringThreadPosition;
@@ -1538,11 +1616,23 @@ const ConversationTimeline = memo(function ConversationTimeline({
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- scrolls the list, outside React, to the "New" line when a thread opens
   useEffect(() => {
     if (!awaitingOpeningJump || !opensAtCatchUp) return;
+    // A paging jump that ended lands, and marks the opening done, by itself.
+    if (catchUpLanding?.identity === listIdentityKey && catchUpLanding.opening) return;
     jumpToCatchUp(true);
+    // A jump that pages in earlier history marks the opening done itself, once it lands or stops.
+    if (catchUpBeforeLoaded || activeCatchUpJump !== null) return;
     // Reading starts once the jump has moved the list, not at the end it opened on.
     const frame = requestAnimationFrame(() => setOpenedAtCatchUpFor(listIdentityKey));
     return () => cancelAnimationFrame(frame);
-  }, [awaitingOpeningJump, opensAtCatchUp, listIdentityKey, jumpToCatchUp]);
+  }, [
+    awaitingOpeningJump,
+    opensAtCatchUp,
+    catchUpBeforeLoaded,
+    activeCatchUpJump,
+    catchUpLanding,
+    listIdentityKey,
+    jumpToCatchUp,
+  ]);
   const readerMeasurable = listSettled && openedAtCatchUpFor === listIdentityKey;
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the list, outside React, once the opening scroll settled and when the New line moves, neither of which scrolls
   useEffect(() => {
@@ -1608,15 +1698,21 @@ const ConversationTimeline = memo(function ConversationTimeline({
         <TimelineRowActivityCtx value={activityState}>
           <TooltipScrollDismissArea
             ref={attachTimelineViewportElement}
-            className="relative h-full min-h-0"
+            className="relative flex h-full min-h-0 flex-col"
             data-assistant-citation-viewport="true"
           >
             {timelineCatchUp !== null && timelineCatchUp.unreadCount > 0 ? (
               <ThreadCatchUpBar
                 unreadCount={timelineCatchUp.unreadCount}
                 since={timelineCatchUp.unreadSince}
+                beforeLoaded={timelineCatchUp.beforeLoaded}
+                jumping={activeCatchUpJump !== null}
                 onJump={() => jumpToCatchUp(false)}
-                onMarkRead={reading.markRead}
+                onStopJump={stopCatchUpJump}
+                onMarkRead={() => {
+                  setCatchUpJump(null);
+                  reading.markRead();
+                }}
               />
             ) : null}
             {onCiteAssistantText && citationThreadRef ? (
@@ -1669,7 +1765,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
               tabIndex={-1}
               data-workspace-focus-default
               className={cn(
-                "messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
+                "messages-timeline-scroll scrollbar-gutter-both min-h-0 flex-1 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
                 topFadeEnabled && "topbar-scroll-fade",
               )}
               ListHeaderComponent={listHeader}

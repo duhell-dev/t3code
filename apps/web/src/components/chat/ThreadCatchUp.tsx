@@ -1,44 +1,73 @@
 import { useGT } from "gt-react";
+import { ArrowUpIcon, CheckIcon } from "lucide-react";
+
+import { Button } from "../ui/button";
+import { Spinner } from "../ui/spinner";
 
 function clockTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-/** Over the timeline, in the banners' lane, while unread messages are left. */
+/**
+ * A slim strip above the timeline, in the flow, while unread messages are left: the count and the
+ * two actions. It takes its own row, so it never covers "Load earlier turns" or a message.
+ */
 export function ThreadCatchUpBar(props: {
   readonly unreadCount: number;
   readonly since: string;
+  /** Unread messages start in history not loaded yet; the count shows only what is loaded. */
+  readonly beforeLoaded: boolean;
+  /** The jump is loading earlier history on its way to the New line. */
+  readonly jumping: boolean;
   readonly onJump: () => void;
+  readonly onStopJump: () => void;
   readonly onMarkRead: () => void;
 }) {
   const gt = useGT();
-  const summary = gt(
-    "{count, plural, one {{count} new message since {time}} other {{count} new messages since {time}}}",
-    { count: props.unreadCount, time: clockTime(props.since) },
-  );
+  const summary = props.beforeLoaded
+    ? gt(
+        "{count, plural, one {More than {count} new message since {time}} other {More than {count} new messages since {time}}}",
+        { count: props.unreadCount, time: clockTime(props.since) },
+      )
+    : gt(
+        "{count, plural, one {{count} new message since {time}} other {{count} new messages since {time}}}",
+        { count: props.unreadCount, time: clockTime(props.since) },
+      );
   return (
-    <div className="chat-banner-lane pointer-events-none absolute top-0 z-30 flex justify-center px-3 pt-2">
-      <div
-        role="status"
-        className="pointer-events-auto flex max-w-full min-w-0 items-center gap-3 rounded-full bg-info py-1 ps-3 pe-1.5 text-xs font-medium text-white shadow-md"
-      >
-        <span className="min-w-0 truncate">{summary}</span>
-        <span className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            className="cursor-pointer rounded-full px-2 py-0.5 font-semibold hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"
-            onClick={props.onJump}
+    <div
+      className="flex shrink-0 justify-center ps-(--chat-lane-inset-start) pe-(--chat-lane-inset-end)"
+      data-thread-catch-up-bar="true"
+    >
+      <div className="chat-content-lane flex items-center justify-center gap-1.5 px-3 py-1">
+        <span role="status" className="flex min-w-0 items-center gap-1.5 text-xs">
+          <span className="sr-only">{summary}</span>
+          <span
+            aria-hidden="true"
+            className="shrink-0 rounded-full bg-destructive px-1.5 font-semibold text-white tabular-nums leading-4"
           >
-            {gt("Jump to new")}
-          </button>
-          <button
-            type="button"
-            className="cursor-pointer rounded-full px-2 py-0.5 font-semibold hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white"
-            onClick={props.onMarkRead}
-          >
-            {gt("Mark as read")}
-          </button>
+            {props.beforeLoaded ? `${props.unreadCount}+` : props.unreadCount}
+          </span>
+          <span aria-hidden="true" className="hidden truncate text-muted-foreground sm:inline">
+            {gt("{count, plural, one {new message} other {new messages}}", {
+              count: props.unreadCount,
+            })}
+          </span>
         </span>
+        {props.jumping ? (
+          <Button size="xs" variant="outline" aria-busy="true" onClick={props.onStopJump}>
+            <Spinner size="xs" aria-hidden="true" />
+            {gt("Stop loading")}
+          </Button>
+        ) : (
+          <Button size="xs" variant="outline" onClick={props.onJump}>
+            <ArrowUpIcon aria-hidden="true" />
+            {gt("Jump to new")}
+          </Button>
+        )}
+        <Button size="xs" variant="ghost" onClick={props.onMarkRead}>
+          <CheckIcon aria-hidden="true" />
+          {gt("Mark as read")}
+        </Button>
       </div>
     </div>
   );

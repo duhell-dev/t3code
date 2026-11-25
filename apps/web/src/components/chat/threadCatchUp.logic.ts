@@ -128,7 +128,10 @@ export function markedReadCatchUpMarks(entries: ReadonlyArray<CatchUpEntry>): Ca
 }
 
 export interface TimelineCatchUp {
-  /** The row the "New" line sits above, or null once the reader marked the thread read. */
+  /**
+   * The row the "New" line sits above; null once the reader marked the thread read, and while the
+   * line is in history not loaded yet.
+   */
   readonly lineRowId: string | null;
   /** Where the line's stretch began. */
   readonly lineAt: string | null;
@@ -136,6 +139,8 @@ export interface TimelineCatchUp {
   readonly unreadCount: number;
   /** What the reader read up to, where the unread messages begin. */
   readonly unreadSince: string;
+  /** Unread messages start before the loaded history, so the line and part of the count are older. */
+  readonly beforeLoaded: boolean;
 }
 
 /**
@@ -161,18 +166,36 @@ function lineRowId(
   return holding?.id ?? null;
 }
 
+/**
+ * Whether history older than the loaded entries could still hold what came after `at`. With more
+ * history to load, the oldest loaded entry has to be at or before `at` for the stretch to start
+ * inside what is loaded.
+ */
+function startsBeforeLoaded(
+  entries: ReadonlyArray<CatchUpEntry>,
+  hasOlderHistory: boolean,
+  at: string,
+): boolean {
+  if (!hasOlderHistory) return false;
+  const oldest = entries[0];
+  return oldest === undefined || isBefore(at, oldest.createdAt);
+}
+
 export function deriveTimelineCatchUp(
   rows: ReadonlyArray<CatchUpRow>,
   entries: ReadonlyArray<CatchUpEntry>,
   boundary: string | null,
   marks: CatchUpMarks,
+  hasOlderHistory = false,
 ): TimelineCatchUp | null {
   if (boundary === null) return null;
   const unreadSince = readPointOf(boundary, marks);
   const unreadCount = unreadAfter(entries, unreadSince).count;
+  const beforeLoaded = startsBeforeLoaded(entries, hasOlderHistory, marks.lineAt ?? unreadSince);
   // Their own message after the line read what is above it, so the line goes with it.
+  // A line in unloaded history would land on the oldest loaded row, which is not where it is.
   const lineRow =
-    marks.lineAt === null || isBefore(marks.lineAt, boundary)
+    marks.lineAt === null || isBefore(marks.lineAt, boundary) || beforeLoaded
       ? null
       : lineRowId(rows, entries, marks.lineAt);
   return unreadCount === 0 && lineRow === null
@@ -182,5 +205,6 @@ export function deriveTimelineCatchUp(
         lineAt: lineRow === null ? null : marks.lineAt,
         unreadCount,
         unreadSince,
+        beforeLoaded: beforeLoaded && unreadCount > 0,
       };
 }

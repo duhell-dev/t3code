@@ -31,6 +31,8 @@ export function useTimelineReading(input: {
   readonly lineInView: boolean;
   readonly rows: Rows;
   readonly entries: Entries;
+  /** History older than `entries` is still on the server. */
+  readonly hasOlderHistory: boolean;
 }) {
   const setReading = useAtomSet(threadReadingAtom(parseScopedThreadKey(input.identity)));
   const activity = useSyncExternalStore(
@@ -64,7 +66,13 @@ export function useTimelineReading(input: {
   if (stored.identity !== input.identity || step.marks !== stored.marks) {
     setStored({ identity: input.identity, marks: step.marks });
   }
-  const catchUp = deriveTimelineCatchUp(input.rows, input.entries, input.boundary, step.marks);
+  const catchUp = deriveTimelineCatchUp(
+    input.rows,
+    input.entries,
+    input.boundary,
+    step.marks,
+    input.hasOlderHistory,
+  );
   const caughtUp = step.caughtUp;
   const unreadCount = catchUp?.unreadCount ?? 0;
 

@@ -1455,6 +1455,129 @@ describe("MessagesTimeline catch-up", () => {
     expect(line(screen)).toBeNull();
     expect(reading()).toMatchObject({ unreadCount: 0, markedRead: 1 });
   });
+
+  // The server's history pages, oldest first; each load prepends the next one the test releases.
+  function Paged(props: {
+    readonly timeline: ReturnType<typeof baseProps>;
+    readonly pages: ReadonlyArray<ReadonlyArray<Entry>>;
+    readonly loaded: ReadonlyArray<Entry>;
+    readonly onLoadEarlier: (release: () => void) => void;
+  }) {
+    const [pagesLeft, setPagesLeft] = useState(props.pages.length);
+    const [loading, setLoading] = useState(false);
+    return (
+      <Following
+        {...props.timeline}
+        timelineEntries={[...props.pages.slice(pagesLeft).flat(), ...props.loaded] as Entry[]}
+        catchUpBoundary={minute(10)}
+        historyControls={{
+          hasMoreHistory: pagesLeft > 0,
+          loading,
+          error: null,
+          onLoadEarlier: () => {
+            setLoading(true);
+            props.onLoadEarlier(() => {
+              setPagesLeft((left) => Math.max(0, left - 1));
+              setLoading(false);
+            });
+          },
+        }}
+      />
+    );
+  }
+  const range = (from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, index) =>
+      said(from + index, long(`Said ${from + index}`)),
+    );
+
+  it("loads earlier history in steps until the New line is loaded, then lands on it", async () => {
+    const { props, reading } = setupCatchUp();
+    const loads: Array<() => void> = [];
+    await using screen = await renderElement(
+      <AppAtomRegistryProvider>
+        <Paged
+          timeline={props}
+          pages={[[said(5, "Seen"), ...range(11, 13)], range(14, 16)]}
+          loaded={range(17, 19)}
+          onLoadEarlier={(release) => loads.push(release)}
+        />
+      </AppAtomRegistryProvider>,
+    );
+    // The line is two pages up: nothing marks the oldest loaded row, and the count says there is more.
+    await vi.waitFor(() => expect(loads).toHaveLength(1));
+    expect(line(screen)).toBeNull();
+    expect(bar(screen)?.textContent).toContain("More than 3 new messages");
+    expect(screen.buttons("Stop loading")).toHaveLength(1);
+    await act(async () => loads[0]!());
+    await vi.waitFor(() => expect(loads).toHaveLength(2));
+    expect(line(screen)).toBeNull();
+    await act(async () => loads[1]!());
+    const viewport = props.listRef.current!.getScrollableNode()!;
+    await vi.waitFor(() => {
+      const shown = line(screen);
+      expect(
+        shown?.parentElement?.querySelector('[data-timeline-row-id="entry-m11"]'),
+      ).not.toBeNull();
+      const offset = shown!.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+      // At the top of the view, with the end of what was read above it.
+      expect(offset).toBeGreaterThan(24);
+      expect(offset).toBeLessThan(160);
+    });
+    expect(loads).toHaveLength(2);
+    expect(bar(screen)?.textContent).toContain("9 new messages");
+    expect(screen.buttons("Jump to new")).toHaveLength(1);
+    expect(reading()).toMatchObject({ caughtUp: false, unreadCount: 9 });
+  });
+
+  it("stops paging when the reader stops the jump, without reading the thread", async () => {
+    const { props, reading } = setupCatchUp();
+    const loads: Array<() => void> = [];
+    await using screen = await renderElement(
+      <AppAtomRegistryProvider>
+        <Paged
+          timeline={props}
+          pages={[[said(5, "Seen"), ...range(11, 13)], range(14, 16)]}
+          loaded={range(17, 19)}
+          onLoadEarlier={(release) => loads.push(release)}
+        />
+      </AppAtomRegistryProvider>,
+    );
+    await vi.waitFor(() => expect(loads).toHaveLength(1));
+    await click(screen.button("Stop loading"));
+    await act(async () => loads[0]!());
+    await vi.waitFor(() => expect(screen.buttons("Jump to new")).toHaveLength(1));
+    expect(loads).toHaveLength(1);
+    expect(reading()).toMatchObject({ caughtUp: false });
+    // Jumping again picks up where it stopped.
+    await click(screen.button("Jump to new"));
+    await vi.waitFor(() => expect(loads).toHaveLength(2));
+  });
+
+  it("keeps the bar out of the timeline, so Load earlier turns and the first row stay uncovered", async () => {
+    const { props } = setupCatchUp();
+    await using screen = await renderElement(
+      <AppAtomRegistryProvider>
+        <Paged
+          timeline={props}
+          pages={[[said(2, "Old")]]}
+          loaded={[said(5, "Seen"), said(12, long("First new")), said(13, long("Second new"))]}
+          onLoadEarlier={() => {}}
+        />
+      </AppAtomRegistryProvider>,
+    );
+    const viewport = props.listRef.current!.getScrollableNode()!;
+    await vi.waitFor(() => expect(bar(screen)).not.toBeNull());
+    await act(async () => viewport.scrollTo({ top: 0 }));
+    await vi.waitFor(() => {
+      const barBottom = bar(screen)!
+        .closest<HTMLElement>("[data-thread-catch-up-bar]")!
+        .getBoundingClientRect().bottom;
+      expect(barBottom).toBeLessThanOrEqual(viewport.getBoundingClientRect().top);
+      expect(
+        screen.button("Load earlier turns").getBoundingClientRect().top,
+      ).toBeGreaterThanOrEqual(barBottom);
+    });
+  });
 });
 
 describe("MessagesTimeline usage limit notice", () => {

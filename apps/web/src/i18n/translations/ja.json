@@ -4233,7 +4233,10 @@
       "v": "v"
     }
   ],
+  "1e43a908eec86da2": "{count, plural, other {{time} 以降の新着メッセージ {count} 件以上}}",
   "f9b15c6f09930dfa": "{count, plural, other {{time} 以降の新着メッセージ {count} 件}}",
+  "59b94f4256f284b8": "{count, plural, other {件の新着メッセージ}}",
+  "56eb0aaf0376fae3": "読み込みを停止",
   "6160a489c4bfb7e4": "新着へ移動",
   "b8736743b1ab48f3": "既読にする",
   "46a0f0c938cbe0a0": "新着 · {time} 以降",

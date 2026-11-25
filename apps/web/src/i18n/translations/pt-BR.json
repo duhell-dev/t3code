@@ -4244,7 +4244,10 @@
       "v": "v"
     }
   ],
+  "1e43a908eec86da2": "{count, plural, one {Mais de {count} nova mensagem desde {time}} other {Mais de {count} novas mensagens desde {time}}}",
   "f9b15c6f09930dfa": "{count, plural, one {{count} mensagem nova desde {time}} other {{count} mensagens novas desde {time}}}",
+  "59b94f4256f284b8": "{count, plural, one {nova mensagem} other {novas mensagens}}",
+  "56eb0aaf0376fae3": "Parar de carregar",
   "6160a489c4bfb7e4": "Ir para o novo",
   "b8736743b1ab48f3": "Marcar como lido",
   "46a0f0c938cbe0a0": "Novo · desde {time}",
