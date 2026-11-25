@@ -375,6 +375,31 @@ describe("ClaudeAdapterV2 native resume history", () => {
 });
 
 describe("ClaudeAdapterV2 runtime query policy", () => {
+  it("hides Claude Code's commit and PR attribution when the project strips agent credits", () => {
+    const base = {
+      modelSelection: CLAUDE_TEST_MODEL_SELECTION,
+      nativeThreadId: "attribution-thread",
+      resume: false,
+      cwd: "/workspace",
+      settings: DEFAULT_CLAUDE_SETTINGS,
+      sdkSettings: { attribution: { commit: "Co-Authored-By: Claude" } },
+    };
+    const hidden = ClaudeAdapterV2.makeClaudeQueryOptions({
+      ...base,
+      hideAgentAttribution: true,
+    });
+    assert.deepEqual((hidden.settings as ClaudeSdk.Settings).attribution, {
+      commit: "",
+      pr: "",
+      sessionUrl: false,
+    });
+    assert.equal((hidden.settings as ClaudeSdk.Settings).showThinkingSummaries, true);
+    const kept = ClaudeAdapterV2.makeClaudeQueryOptions(base);
+    assert.deepEqual((kept.settings as ClaudeSdk.Settings).attribution, {
+      commit: "Co-Authored-By: Claude",
+    });
+  });
+
   it.each([
     "-- --thinking-display omitted",
     "--thinking-display summarized -- --thinking-display omitted",

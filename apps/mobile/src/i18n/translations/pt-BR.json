@@ -3752,7 +3752,7 @@
   "74d09db9719594eb": "Permite que os agentes usem o navegador de pré-visualização do app.",
   "13087312bc6a0b45": "Pull requests",
   "efb65f53a2382026": "Remover créditos de agentes ao mesclar",
-  "88631d9ea293eccd": "Remove os créditos de agentes reconhecidos das mensagens de merge e squash nos hosts que oferecem suporte, mantendo os coautores humanos. Inclui o auto-merge. Exclui merge queues, merges de stack e commits existentes.",
+  "c1c38dd17b0e7b52": "Remove os créditos de agentes reconhecidos das mensagens de merge e squash nos hosts que oferecem suporte, mantendo os coautores humanos. Inclui o auto-merge. Exclui merge queues, merges de stack e commits existentes. Novos commits e pull requests de sessões do Claude também não recebem créditos de agentes.",
   "15ed472fb3ba4a6d": "Branch padrão",
   "abe5615aea30066d": "Fazer pull automaticamente",
   "17782375efd2c928": "Mantém o branch padrão atualizado quando não há alterações locais.",

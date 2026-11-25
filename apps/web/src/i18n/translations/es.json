@@ -9161,7 +9161,7 @@
   "1a58c587c585a39e": "Restablecer el pull automático predeterminado al valor predeterminado",
   "4f2a1d5aef3f73a5": "Restablecer el pull automático a desactivado",
   "0c8037e10e1354fa": "Pull automático predeterminado",
-  "553f7007fe9693e2": "Quita las líneas de crédito de agentes reconocidas de los mensajes de fusión y squash en los hosts compatibles, manteniendo a los coautores humanos. Incluye la fusión automática. Excluye las colas de fusión, las fusiones de pilas y los commits existentes.",
+  "04849eaacb194977": "Quita las líneas de crédito de agentes reconocidas de los mensajes de fusión y squash en los hosts compatibles, manteniendo a los coautores humanos. Incluye la fusión automática. Excluye las colas de fusión, las fusiones de pilas y los commits existentes. Los nuevos commits y pull requests de las sesiones de Claude tampoco reciben créditos de agentes.",
   "f90a903847ac4a4d": "Restablecer la eliminación de créditos del agente al valor predeterminado",
   "edf48fd6b2e8f9df": "Mantener créditos de agentes",
   "efb65f53a2382026": "Quitar créditos de agentes al fusionar",

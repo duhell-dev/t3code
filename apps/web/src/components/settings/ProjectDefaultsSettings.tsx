@@ -480,7 +480,7 @@ export function ProjectDefaultsSettings({ category }: { category: ProjectSetting
             mixed={mixedAgentCredits}
             {...searchableSetting("remove-agent-credits-on-merge")}
             description={gt(
-              "Remove recognized agent credit lines from merge and squash messages on hosts that support it, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits.",
+              "Remove recognized agent credit lines from merge and squash messages on hosts that support it, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits. New commits and pull requests from Claude sessions get no agent credit either.",
             )}
             resetAction={
               settings.removeAgentCreditsOnMerge ? (

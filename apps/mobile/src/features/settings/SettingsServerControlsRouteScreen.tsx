@@ -427,7 +427,7 @@ function ServerSettingsDetail(props: { readonly page: SettingsPage }) {
                     subtitle={managedSubtitle(
                       "removeAgentCreditsOnMerge",
                       gt(
-                        "Remove recognized agent credits from merge and squash messages on hosts that support it, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits.",
+                        "Remove recognized agent credits from merge and squash messages on hosts that support it, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits. New commits and pull requests from Claude sessions get no agent credit either.",
                       ),
                     )}
                     value={uniform("removeAgentCreditsOnMerge")}

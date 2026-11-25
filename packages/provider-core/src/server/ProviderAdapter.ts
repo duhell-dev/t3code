@@ -588,6 +588,8 @@ export interface ProviderAdapterV2EnsureThreadInput {
 
 export interface ProviderAdapterV2TurnInput {
   readonly agentFeedback?: AgentFeedbackMode;
+  /** The project's removeAgentCreditsOnMerge: the agent's own commits and PRs credit no agent. */
+  readonly hideAgentAttribution?: boolean;
   readonly appThread: OrchestrationV2AppThread;
   readonly threadId: ThreadId;
   readonly runId: RunId;

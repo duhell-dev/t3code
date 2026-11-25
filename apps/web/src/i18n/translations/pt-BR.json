@@ -9162,7 +9162,7 @@
   "1a58c587c585a39e": "Redefinir o pull automático padrão para o padrão",
   "4f2a1d5aef3f73a5": "Redefinir pull automático para desativado",
   "0c8037e10e1354fa": "Pull automático padrão",
-  "553f7007fe9693e2": "Remove as linhas de crédito de agentes reconhecidas das mensagens de merge e squash nos hosts que oferecem suporte, mantendo os coautores humanos. Inclui o auto-merge. Exclui merge queues, merges de stack e commits existentes.",
+  "04849eaacb194977": "Remove as linhas de crédito de agentes reconhecidas das mensagens de merge e squash nos hosts que oferecem suporte, mantendo os coautores humanos. Inclui o auto-merge. Exclui merge queues, merges de stack e commits existentes. Novos commits e pull requests de sessões do Claude também não recebem créditos de agentes.",
   "f90a903847ac4a4d": "Redefinir a remoção de créditos de agentes para o padrão",
   "edf48fd6b2e8f9df": "Manter créditos de agentes",
   "efb65f53a2382026": "Remover créditos de agentes ao mesclar",

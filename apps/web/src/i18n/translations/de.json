@@ -9163,7 +9163,7 @@
   "1a58c587c585a39e": "Standardmäßiges automatisches Pullen auf Standard zurücksetzen",
   "4f2a1d5aef3f73a5": "Automatisches Pullen auf Aus zurücksetzen",
   "0c8037e10e1354fa": "Standard für automatisches Pullen",
-  "553f7007fe9693e2": "Erkannte Agenten-Credits aus Merge- und Squash-Nachrichten entfernen, sofern der Host das unterstützt; menschliche Co-Autoren bleiben erhalten. Gilt auch für Auto-Merge. Ausgenommen sind Merge-Queues, Stack-Merges und bestehende Commits.",
+  "04849eaacb194977": "Erkannte Agenten-Credits aus Merge- und Squash-Nachrichten entfernen, sofern der Host das unterstützt; menschliche Co-Autoren bleiben erhalten. Gilt auch für Auto-Merge. Ausgenommen sind Merge-Queues, Stack-Merges und bestehende Commits. Neue Commits und Pull Requests aus Claude-Sitzungen erhalten ebenfalls keine Agenten-Credits.",
   "f90a903847ac4a4d": "Entfernen der Agenten-Credits auf Standard zurücksetzen",
   "edf48fd6b2e8f9df": "Agenten-Credits behalten",
   "efb65f53a2382026": "Agenten-Credits beim Mergen entfernen",

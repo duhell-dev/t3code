@@ -9169,7 +9169,7 @@
   "1a58c587c585a39e": "Återställ automatisk pull som standard till standard",
   "4f2a1d5aef3f73a5": "Återställ automatisk pull till av",
   "0c8037e10e1354fa": "Automatisk pull som standard",
-  "553f7007fe9693e2": "Ta bort igenkända agentrader för medförfattare från merge- och squash-meddelanden hos värdar som stöder det, och behåll mänskliga medförfattare. Gäller även automatisk merge. Gäller inte merge-köer, stack-merges och befintliga commits.",
+  "04849eaacb194977": "Ta bort igenkända agentrader för medförfattare från merge- och squash-meddelanden hos värdar som stöder det, och behåll mänskliga medförfattare. Gäller även automatisk merge. Gäller inte merge-köer, stack-merges och befintliga commits. Nya commits och pull requests från Claude-sessioner får inte heller någon agentmedförfattare.",
   "f90a903847ac4a4d": "Återställ borttagning av agentkrediter till standard",
   "edf48fd6b2e8f9df": "Behåll agentmedförfattare",
   "efb65f53a2382026": "Ta bort agentmedförfattare vid merge",

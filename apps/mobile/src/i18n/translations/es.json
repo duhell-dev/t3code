@@ -3752,7 +3752,7 @@
   "74d09db9719594eb": "Permite que los agentes usen el navegador de vista previa de la app.",
   "13087312bc6a0b45": "Pull requests",
   "efb65f53a2382026": "Quitar créditos de agentes al fusionar",
-  "88631d9ea293eccd": "Quita los créditos de agentes reconocidos de los mensajes de fusión y squash en los hosts compatibles, manteniendo a los coautores humanos. Incluye la fusión automática. Excluye las colas de fusión, las fusiones de pilas y los commits existentes.",
+  "c1c38dd17b0e7b52": "Quita los créditos de agentes reconocidos de los mensajes de fusión y squash en los hosts compatibles, manteniendo a los coautores humanos. Incluye la fusión automática. Excluye las colas de fusión, las fusiones de pilas y los commits existentes. Los nuevos commits y pull requests de las sesiones de Claude tampoco reciben créditos de agentes.",
   "15ed472fb3ba4a6d": "Rama predeterminada",
   "abe5615aea30066d": "Hacer pull automáticamente",
   "17782375efd2c928": "Mantiene actualizada la rama predeterminada cuando no hay cambios locales.",

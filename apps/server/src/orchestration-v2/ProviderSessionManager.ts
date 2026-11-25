@@ -503,6 +503,25 @@ export const layerWithOptions = (
             Effect.map((settings) => settings.agentFeedback.mode),
             Effect.orElseSucceed(() => "off" as const),
           );
+      const withAgentAttribution = <
+        Input extends Pick<
+          ProviderAdapter.ProviderAdapterV2TurnInput,
+          "appThread" | "hideAgentAttribution"
+        >,
+      >(
+        input: Input,
+      ): Effect.Effect<Input> =>
+        Option.isNone(serverSettings)
+          ? Effect.succeed(input)
+          : serverSettings.value.getSettings.pipe(
+              Effect.map((settings) =>
+                resolveProjectSettings(settings, input.appThread.projectId).settings
+                  .removeAgentCreditsOnMerge
+                  ? { ...input, hideAgentAttribution: true }
+                  : input,
+              ),
+              Effect.orElseSucceed(() => input),
+            );
       const agentAccessSettings = Effect.fn("ProviderSessionManagerV2.agentAccessSettings")(
         function* (threadId: ThreadId) {
           if (Option.isNone(serverSettings)) return { browser: true, device: false };
@@ -2738,8 +2757,10 @@ export const layerWithOptions = (
             ),
           startTurn: (input) =>
             busyTurn(input, () =>
-              agentFeedbackMode.pipe(
-                Effect.flatMap((agentFeedback) => runtime.startTurn({ ...input, agentFeedback })),
+              Effect.all([agentFeedbackMode, withAgentAttribution(input)]).pipe(
+                Effect.flatMap(([agentFeedback, turn]) =>
+                  runtime.startTurn({ ...turn, agentFeedback }),
+                ),
                 turnMetrics("send", input.modelSelection.model),
               ),
             ),
@@ -2748,7 +2769,8 @@ export const layerWithOptions = (
             : {
                 resumeTurn: (input: ProviderAdapter.ProviderAdapterV2ResumeTurnInput) =>
                   busyTurn(input, () =>
-                    runtime.resumeTurn!(input).pipe(
+                    withAgentAttribution(input).pipe(
+                      Effect.flatMap((turn) => runtime.resumeTurn!(turn)),
                       turnMetrics("resume", input.modelSelection.model),
                     ),
                   ),
@@ -2758,7 +2780,8 @@ export const layerWithOptions = (
             : {
                 compactThread: (input: ProviderAdapter.ProviderAdapterV2TurnInput) =>
                   busyTurn(input, () =>
-                    runtime.compactThread!(input).pipe(
+                    withAgentAttribution(input).pipe(
+                      Effect.flatMap((turn) => runtime.compactThread!(turn)),
                       turnMetrics("compact", input.modelSelection.model),
                     ),
                   ),

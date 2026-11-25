@@ -488,6 +488,7 @@ const makeProviderAdapter = Effect.fnUntraced(function* (
     readonly backgroundTasksEndWithProcess?: boolean;
     readonly hangSessionScopeClose?: boolean;
     readonly startTurn?: Effect.Effect<void, ProviderAdapter.ProviderAdapterProtocolError>;
+    readonly turnInputs?: Ref.Ref<ReadonlyArray<ProviderAdapter.ProviderAdapterV2TurnInput>>;
     readonly interruptTurn?: Effect.Effect<void>;
     readonly beforeUnload?: Effect.Effect<void>;
     readonly unloads?: Queue.Queue<string>;
@@ -498,6 +499,11 @@ const makeProviderAdapter = Effect.fnUntraced(function* (
   } = {},
 ) {
   const mcpSessions = yield* McpProviderSessions.McpProviderSessions;
+  const recordTurn = (turn: ProviderAdapter.ProviderAdapterV2TurnInput) =>
+    (options.turnInputs === undefined
+      ? Effect.void
+      : Ref.update(options.turnInputs, (turns) => [...turns, turn])
+    ).pipe(Effect.andThen(options.startTurn ?? Effect.void));
   const countClose = Effect.addFinalizer(() =>
     Ref.update(state, (current) => ({
       ...current,
@@ -610,9 +616,9 @@ const makeProviderAdapter = Effect.fnUntraced(function* (
               ...current,
               resumeCount: current.resumeCount + 1,
             })).pipe(Effect.as(threadInput.providerThread)),
-          startTurn: () => options.startTurn ?? Effect.void,
-          resumeTurn: () => options.startTurn ?? Effect.void,
-          compactThread: () => options.startTurn ?? Effect.void,
+          startTurn: (turn) => recordTurn(turn),
+          resumeTurn: (turn) => recordTurn(ProviderAdapter.resumeTurnInput(turn)),
+          compactThread: (turn) => recordTurn(turn),
           steerTurn: () => Effect.void,
           interruptTurn: () =>
             Ref.update(state, (current) => ({
@@ -678,6 +684,7 @@ function layerTest(input: {
   readonly backgroundTasksEndWithProcess?: boolean;
   readonly hangSessionScopeClose?: boolean;
   readonly startTurn?: Effect.Effect<void, ProviderAdapter.ProviderAdapterProtocolError>;
+  readonly turnInputs?: Ref.Ref<ReadonlyArray<ProviderAdapter.ProviderAdapterV2TurnInput>>;
   readonly interruptTurn?: Effect.Effect<void>;
   readonly beforeUnload?: Effect.Effect<void>;
   readonly unloads?: Queue.Queue<string>;
@@ -730,6 +737,7 @@ function layerTest(input: {
         ? {}
         : { hangSessionScopeClose: input.hangSessionScopeClose }),
       ...(input.startTurn === undefined ? {} : { startTurn: input.startTurn }),
+      ...(input.turnInputs === undefined ? {} : { turnInputs: input.turnInputs }),
       ...(input.interruptTurn === undefined ? {} : { interruptTurn: input.interruptTurn }),
       ...(input.beforeUnload === undefined ? {} : { beforeUnload: input.beforeUnload }),
       ...(input.unloads === undefined ? {} : { unloads: input.unloads }),
@@ -1522,6 +1530,97 @@ it.effect(
             projectServiceLayer,
             serverSettingsLayer: ServerSettings.layerTest({
               projectSettingsOverrides: { [projectId]: { enableAgentBrowserAccess: true } },
+            }),
+          }),
+        ),
+      );
+    }),
+);
+
+it.effect(
+  "ProviderSessionManagerV2 tells the provider to hide agent attribution in projects that strip agent credits",
+  () =>
+    Effect.gen(function* () {
+      const state = yield* Ref.make(emptyState);
+      const turnInputs = yield* Ref.make<ReadonlyArray<ProviderAdapter.ProviderAdapterV2TurnInput>>(
+        [],
+      );
+      const strippedProject = ProjectId.make("project-provider-session-manager-no-credits");
+      const otherProject = ProjectId.make("project-provider-session-manager-credits");
+      yield* Effect.gen(function* () {
+        const eventSink = yield* EventSink.EventSinkV2;
+        const idAllocator = yield* IdAllocator.IdAllocatorV2;
+        const manager = yield* ProviderSessionManager.ProviderSessionManagerV2;
+        const projectionStore = yield* ProjectionStore.ProjectionStoreV2;
+        const now = yield* DateTime.now;
+        const openThread = Effect.fnUntraced(function* (projectId: ProjectId, name: string) {
+          const threadId = ThreadId.make(`thread-provider-session-manager-${name}`);
+          const providerSessionId = yield* idAllocator.allocate.providerSession({
+            providerInstanceId: modelSelection.instanceId,
+            threadId,
+          });
+          yield* eventSink.write({
+            events: [yield* makeThreadCreatedEvent({ idAllocator, threadId, now, projectId })],
+          });
+          const runtime = yield* manager.open({
+            threadId,
+            providerSessionId,
+            modelSelection,
+            runtimePolicy,
+          });
+          const runId = idAllocator.derive.run({ threadId, ordinal: 1 });
+          const turn: ProviderAdapter.ProviderAdapterV2TurnInput = {
+            appThread: (yield* projectionStore.getThreadProjection(threadId)).thread,
+            threadId,
+            runId,
+            runOrdinal: 1,
+            providerTurnOrdinal: 1,
+            attemptId: idAllocator.derive.runAttempt({ runId, attemptOrdinal: 1 }),
+            rootNodeId: idAllocator.derive.rootNode({ runId }),
+            providerThread: makeProviderThread({ idAllocator, threadId, providerSessionId, now }),
+            message: {
+              createdBy: "user",
+              creationSource: "web",
+              messageId: yield* idAllocator.allocate.message({ threadId, ordinal: 1 }),
+              text: "commit this",
+              attachments: [],
+            },
+            modelSelection,
+            runtimePolicy,
+          };
+          return { runtime, turn };
+        });
+        const stripped = yield* openThread(strippedProject, "no-credits");
+        const other = yield* openThread(otherProject, "credits");
+
+        yield* stripped.runtime.startTurn(stripped.turn);
+        yield* stripped.runtime.resumeTurn!({
+          ...stripped.turn,
+          messageId: stripped.turn.message.messageId,
+        });
+        yield* stripped.runtime.compactThread!(stripped.turn);
+        yield* other.runtime.startTurn(other.turn);
+
+        assert.deepEqual(
+          (yield* Ref.get(turnInputs)).map((turn) => [
+            turn.appThread.projectId,
+            turn.hideAgentAttribution,
+          ]),
+          [
+            [strippedProject, true],
+            [strippedProject, true],
+            [strippedProject, true],
+            [otherProject, undefined],
+          ],
+        );
+      }).pipe(
+        Effect.provide(
+          layerTest({
+            state,
+            idleTimeoutMs: 60_000,
+            turnInputs,
+            serverSettingsLayer: ServerSettings.layerTest({
+              projectSettingsOverrides: { [strippedProject]: { removeAgentCreditsOnMerge: true } },
             }),
           }),
         ),

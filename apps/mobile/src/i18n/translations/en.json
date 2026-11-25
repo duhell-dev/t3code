@@ -3759,7 +3759,7 @@
   "74d09db9719594eb": "Allow agents to use the in-app preview browser.",
   "13087312bc6a0b45": "Pull requests",
   "efb65f53a2382026": "Remove agent credits when merging",
-  "88631d9ea293eccd": "Remove recognized agent credits from merge and squash messages on hosts that support it, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits.",
+  "c1c38dd17b0e7b52": "Remove recognized agent credits from merge and squash messages on hosts that support it, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits. New commits and pull requests from Claude sessions get no agent credit either.",
   "15ed472fb3ba4a6d": "Default branch",
   "abe5615aea30066d": "Automatically pull",
   "17782375efd2c928": "Keep the default branch current when there are no local changes.",

@@ -9171,7 +9171,7 @@
   "1a58c587c585a39e": "Reset default automatic pull to default",
   "4f2a1d5aef3f73a5": "Reset automatic pull to off",
   "0c8037e10e1354fa": "Default automatic pull",
-  "553f7007fe9693e2": "Remove recognized agent credit lines from merge and squash messages on hosts that support it, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits.",
+  "04849eaacb194977": "Remove recognized agent credit lines from merge and squash messages on hosts that support it, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits. New commits and pull requests from Claude sessions get no agent credit either.",
   "f90a903847ac4a4d": "Reset agent credit removal to default",
   "edf48fd6b2e8f9df": "Keep agent credits",
   "efb65f53a2382026": "Remove agent credits when merging",

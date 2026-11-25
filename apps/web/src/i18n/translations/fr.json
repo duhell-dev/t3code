@@ -9163,7 +9163,7 @@
   "1a58c587c585a39e": "Réinitialiser le pull automatique par défaut à la valeur par défaut",
   "4f2a1d5aef3f73a5": "Désactiver le pull automatique",
   "0c8037e10e1354fa": "Pull automatique par défaut",
-  "553f7007fe9693e2": "Retire les lignes de crédit d’agent reconnues des messages de fusion et de squash sur les hébergeurs qui le permettent, en gardant les co-auteurs humains. Inclut la fusion automatique. Exclut les files de fusion, les fusions de pile et les commits existants.",
+  "04849eaacb194977": "Retire les lignes de crédit d’agent reconnues des messages de fusion et de squash sur les hébergeurs qui le permettent, en gardant les co-auteurs humains. Inclut la fusion automatique. Exclut les files de fusion, les fusions de pile et les commits existants. Les nouveaux commits et pull requests des sessions Claude ne reçoivent pas non plus de crédit d’agent.",
   "f90a903847ac4a4d": "Réinitialiser la suppression des crédits d’agent à la valeur par défaut",
   "edf48fd6b2e8f9df": "Garder les crédits d’agent",
   "efb65f53a2382026": "Retirer les crédits d’agent lors de la fusion",

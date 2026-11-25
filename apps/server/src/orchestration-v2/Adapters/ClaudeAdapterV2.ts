@@ -2539,6 +2539,7 @@ export function makeClaudeQueryOptions(input: {
   readonly settings?: ClaudeSettings;
   readonly promptSuggestions?: boolean;
   readonly sdkSettings?: string | ClaudeSdkSettings;
+  readonly hideAgentAttribution?: boolean;
   readonly environment?: NodeJS.ProcessEnv;
   readonly mcpServers?: ClaudeQueryOptions["mcpServers"];
   readonly agentFeedback?: AgentFeedbackMode;
@@ -2646,6 +2647,14 @@ export function makeClaudeQueryOptions(input: {
               : { ENABLE_TOOL_SEARCH: input.toolSearchOverride }),
           },
         } as ClaudeSdkSettings);
+  // The object form, since older Claude Code versions reject `attribution: false`.
+  const attributedQuerySettings =
+    input.hideAgentAttribution !== true || typeof effectiveQuerySettings === "string"
+      ? effectiveQuerySettings
+      : ({
+          ...effectiveQuerySettings,
+          attribution: { commit: "", pr: "", sessionUrl: false },
+        } as ClaudeSdkSettings);
   const deviceInstructions = input.mcpServers !== undefined && input.deviceToolsAvailable === true;
   const agentFeedback = input.mcpServers === undefined ? "off" : (input.agentFeedback ?? "off");
   const options: ClaudeAgentSdkQueryOptions = {
@@ -2677,16 +2686,16 @@ export function makeClaudeQueryOptions(input: {
       ? {
           thinking: { type: "adaptive" as const, display: "summarized" as const },
           settings:
-            typeof effectiveQuerySettings === "string"
-              ? effectiveQuerySettings
+            typeof attributedQuerySettings === "string"
+              ? attributedQuerySettings
               : {
-                  ...effectiveQuerySettings,
+                  ...attributedQuerySettings,
                   showThinkingSummaries: true,
                 },
         }
-      : effectiveQuerySettings === undefined
+      : attributedQuerySettings === undefined
         ? {}
-        : { settings: effectiveQuerySettings }),
+        : { settings: attributedQuerySettings }),
     ...(input.onUserDialog === undefined ? {} : { onUserDialog: input.onUserDialog }),
     ...(input.onElicitation === undefined ? {} : { onElicitation: input.onElicitation }),
     ...(input.supportedDialogKinds === undefined
@@ -13757,6 +13766,7 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             ...(launchArgSettings === undefined
               ? {}
               : { sdkSettings: claudeSdkLaunchArgSettings(launchArgSettings) }),
+            ...(turnInput.hideAgentAttribution === true ? { hideAgentAttribution: true } : {}),
             environment: claudeQueryEnvironment(
               adapterOptions.environment,
               turnInput.appThread,

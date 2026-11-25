@@ -3758,7 +3758,7 @@
   "74d09db9719594eb": "Låt agenter använda förhandsvisningswebbläsaren i appen.",
   "13087312bc6a0b45": "Pull requests",
   "efb65f53a2382026": "Ta bort agentmedförfattare vid merge",
-  "88631d9ea293eccd": "Ta bort igenkända agentmedförfattare från merge- och squash-meddelanden hos värdar som stöder det, och behåll mänskliga medförfattare. Gäller även automatisk merge. Gäller inte merge-köer, stack-merges och befintliga commits.",
+  "c1c38dd17b0e7b52": "Ta bort igenkända agentmedförfattare från merge- och squash-meddelanden hos värdar som stöder det, och behåll mänskliga medförfattare. Gäller även automatisk merge. Gäller inte merge-köer, stack-merges och befintliga commits. Nya commits och pull requests från Claude-sessioner får inte heller någon agentmedförfattare.",
   "15ed472fb3ba4a6d": "Standardgren",
   "abe5615aea30066d": "Pulla automatiskt",
   "17782375efd2c928": "Håll standardgrenen aktuell när det inte finns några lokala ändringar.",
