@@ -609,24 +609,84 @@ const saveScreenshot = Effect.fn("McpHttpServer.saveScreenshot")(function* (
 const MAX_NAMED_ARGUMENTS = 5;
 const MAX_ARGUMENT_NAME_CHARS = 64;
 
+// Nested objects checked like the top level: a dropped key in `target` silently runs the child
+// on the default provider instance instead of the one asked for.
+const STRICT_NESTED_ARGUMENTS = ["target"];
+const FIELD_HINTS: Record<string, string> = {
+  instanceId: "providerInstanceId",
+  instance: "providerInstanceId",
+  provider: "providerInstanceId",
+  providerId: "providerInstanceId",
+  providerInstance: "providerInstanceId",
+};
+
+const unknownKeysMessage = (
+  what: "argument" | `${string} field`,
+  unknown: ReadonlyArray<string>,
+  accepted: ReadonlySet<string>,
+) => {
+  const named = unknown
+    .slice(0, MAX_NAMED_ARGUMENTS)
+    .map((key) => JSON.stringify(cutText(key, MAX_ARGUMENT_NAME_CHARS)));
+  const more = unknown.length > named.length ? ` and ${unknown.length - named.length} more` : "";
+  const hints = unknown.flatMap((key) => {
+    const hint = FIELD_HINTS[key];
+    return hint !== undefined && accepted.has(hint) ? [`use "${hint}" instead of "${key}"`] : [];
+  });
+  const acceptedText = [...accepted].join(", ") || "none";
+  return `Unknown ${what}${unknown.length === 1 ? "" : "s"} ${named.join(", ")}${more}.${
+    hints.length > 0 ? ` Did you mean: ${hints.join("; ")}?` : ""
+  } Accepted ${what === "argument" ? "arguments" : "fields"}: ${acceptedText}.`;
+};
+
+const nestedObjectInput = (value: unknown): Record<string, unknown> | undefined => {
+  if (typeof value === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return Predicate.isObject(parsed) && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return Predicate.isObject(value) && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+};
+
 /**
  * Rejects top-level arguments the advertised schema does not list, naming them. Nested objects stay lenient:
  * the advertised schema merges tagged unions, so strict decoding would reject keys agents were shown.
+ * The few nested objects in STRICT_NESTED_ARGUMENTS are checked against their advertised keys.
  */
 const advertisedArgumentsOnly = (tool: Tool.Any) => {
   const { properties } = advertisedJsonSchema(tool);
   const accepted = new Set(Predicate.isObject(properties) ? Object.keys(properties) : []);
-  const acceptedText = [...accepted].join(", ") || "none";
+  const nested = STRICT_NESTED_ARGUMENTS.flatMap((name) => {
+    const property = Predicate.isObject(properties) ? properties[name] : undefined;
+    if (
+      !Predicate.isObject(property) ||
+      !Predicate.isObject(property.properties) ||
+      property.additionalProperties !== undefined
+    ) {
+      return [];
+    }
+    return [{ name, accepted: new Set(Object.keys(property.properties)) }];
+  });
   return Schema.Record(Schema.String, Schema.Unknown).check(
     Schema.makeFilter((input) => {
       const unknown = Object.keys(input).filter((key) => !accepted.has(key));
-      if (unknown.length === 0) return undefined;
-      const named = unknown
-        .slice(0, MAX_NAMED_ARGUMENTS)
-        .map((key) => JSON.stringify(cutText(key, MAX_ARGUMENT_NAME_CHARS)));
-      const more =
-        unknown.length > named.length ? ` and ${unknown.length - named.length} more` : "";
-      return `Unknown argument${unknown.length === 1 ? "" : "s"} ${named.join(", ")}${more}. Accepted arguments: ${acceptedText}.`;
+      if (unknown.length > 0) return unknownKeysMessage("argument", unknown, accepted);
+      for (const field of nested) {
+        const value = nestedObjectInput(input[field.name]);
+        if (value === undefined) continue;
+        const unknownNested = Object.keys(value).filter((key) => !field.accepted.has(key));
+        if (unknownNested.length > 0) {
+          return unknownKeysMessage(`${field.name} field`, unknownNested, field.accepted);
+        }
+      }
+      return undefined;
     }),
   );
 };

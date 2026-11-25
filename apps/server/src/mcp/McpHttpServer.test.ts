@@ -718,6 +718,23 @@ it.effect("rejects arguments a tool does not declare instead of dropping them", 
   }).pipe(Effect.provide(layerRecordingTools(calls)));
 });
 
+it.effect("rejects an unknown target field instead of running on the default provider", () => {
+  const calls: Array<unknown> = [];
+  return Effect.gen(function* () {
+    const misspelled = yield* Effect.flip(
+      callTool("delegate_task", { task: "Inspect", target: { instanceId: "codex" } }),
+    );
+    const asText = yield* Effect.flip(
+      callTool("delegate_task", { task: "Inspect", target: '{"instanceId":"codex"}' }),
+    );
+
+    expect(calls).toEqual([]);
+    expect(misspelled.message).toContain('Unknown target field "instanceId"');
+    expect(misspelled.message).toContain('use "providerInstanceId" instead of "instanceId"');
+    expect(asText.message).toContain('Unknown target field "instanceId"');
+  }).pipe(Effect.provide(layerRecordingTools(calls)));
+});
+
 it.effect("accepts a nested key the merged advertised schema shows", () => {
   const calls: Array<unknown> = [];
   return Effect.gen(function* () {
