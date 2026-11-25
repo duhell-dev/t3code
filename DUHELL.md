@@ -13,7 +13,8 @@ the queue. Every build runs upstream code and its npm dependencies, so:
 
 - Build jobs have read-only permissions and get no secrets.
 - `SYNC_TOKEN` is only used by the `sync` job and the release `tag` job. Both run git and the
-  GitHub API only, no install, no build, no script from the repository. Keep it that way.
+  GitHub API only, no install, no build, no upstream code. The one exception is the fork's own
+  conflict resolver in the `sync` job, read from `duhell` before the merge. Keep it that way.
 - In the release workflow only `publish` may write (`contents: write`). It uploads the built files and runs
   no repository code.
 - Workflows from fork pull requests always need approval.
@@ -24,7 +25,16 @@ the queue. Every build runs upstream code and its npm dependencies, so:
 into `main`, merges `main` into `duhell` and pushes, which starts a release build. It needs the
 `SYNC_TOKEN` secret (fine-grained, this repository only, Contents and Workflows read/write);
 without it, upstream changes under `.github/workflows/` cannot be pushed and the run opens an issue
-instead. A merge conflict also opens an issue and changes nothing.
+instead. Conflicts in the translation catalogs and in `agentContextBudget.json`, which almost
+every sync runs into, are resolved by `.github/duhell/resolve-sync-conflicts.py` (taken from
+`duhell` before the merge, standard library only). Any other conflict opens an issue and changes
+nothing.
+
+## Updating servers
+
+Agents and scripts do not roll out releases on their own: no update plan, no `t3 update`, no
+server restart unless the user asks for that update. The user updates servers with the update
+button. The fork's job ends when a working release is published.
 
 ## Release notes
 

@@ -17,8 +17,10 @@ concurrency:
   cancel-in-progress: false
 
 # Der einzige Job mit SYNC_TOKEN außer `tag` in duhell-release.yml. Er macht nur
-# git und gh: kein install, kein build, kein Skript aus dem Repo. Bleibt das so,
-# kann Code aus dem Original das Token nicht sehen.
+# git und gh: kein install, kein build, kein Code aus dem Original. Einzige
+# Ausnahme ist der fork-eigene Konflikt-Auflöser (Python, nur Standardbibliothek),
+# und der kommt aus duhell vor dem Merge. Bleibt das so, kann Code aus dem
+# Original das Token nicht sehen.
 jobs:
   sync:
     if: github.repository != 'pingdotgg/t3code'
@@ -79,7 +81,16 @@ jobs:
         run: |
           git fetch origin main
           before="$(git rev-parse HEAD)"
+          # Fork-eigener Auflöser für die Datenkonflikte jedes Abgleichs (Übersetzungen,
+          # Budget-Datei), vor dem Merge aus duhell genommen, nie aus dem Original.
+          git show HEAD:.github/duhell/resolve-sync-conflicts.py > "$RUNNER_TEMP/resolve.py"
+          merged=false
           if git merge --no-edit --no-ff origin/main -m "Merge main (upstream sync) into duhell"; then
+            merged=true
+          elif python3 -I "$RUNNER_TEMP/resolve.py" && git commit --no-edit; then
+            merged=true
+          fi
+          if [ "$merged" = true ]; then
             if ! git push origin duhell 2> push.log; then
               cat push.log
               grep -Eiq "refusing to allow .*workflow" push.log && { echo "blocked=true" >> "$GITHUB_OUTPUT"; exit 0; }
