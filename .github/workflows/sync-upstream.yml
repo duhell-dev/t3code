@@ -87,7 +87,7 @@ jobs:
           merged=false
           if git merge --no-edit --no-ff origin/main -m "Merge main (upstream sync) into duhell"; then
             merged=true
-          elif python3 -I "$RUNNER_TEMP/resolve.py" && git commit --no-edit; then
+          elif python3 -I "$RUNNER_TEMP/resolve.py" && git commit --no-edit --cleanup=strip; then
             merged=true
           fi
           if [ "$merged" = true ]; then

@@ -56,10 +56,13 @@ jobs:
       # Schema wie das Original (scripts/resolve-nightly-release.ts):
       # <Basis+1 Patch>-nightly.<JJJJMMTT>.<Nummer>. cliReleaseChannelOf erlaubt
       # danach keine Buchstaben mehr; den Fork erkennt man an der Nummer
-      # (1000000 + Laufnummer, das Original zählt bei ~4500) und am Release-Titel.
+      # (1000000 + Laufnummer, mindestens höchste bisherige + 1; das Original zählt
+      # bei ~4500) und am Release-Titel.
       - id: v
         name: Version berechnen
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # Ohne Node: der eigene Runner hat es erst nach setup-ci-deps.
@@ -67,7 +70,11 @@ jobs:
           [[ -n "$base" ]] || { echo "Keine Version in apps/desktop/package.json" >&2; exit 1; }
           core="${base%%[-+]*}"
           IFS=. read -r major minor patch <<<"$core"
-          version="${major}.${minor}.$((patch + 1))-nightly.$(date -u +%Y%m%d).$((1000000 + GITHUB_RUN_NUMBER))"
+          # Nie unter einem schon veröffentlichten Fork-Release (es gab Releases ohne Actions).
+          highest="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '[.[].tag_name | capture("\\.(?<n>[0-9]+)$").n | tonumber] | max // 0')"
+          number=$((1000000 + GITHUB_RUN_NUMBER))
+          (( highest < number )) || number=$((highest + 1))
+          version="${major}.${minor}.$((patch + 1))-nightly.$(date -u +%Y%m%d).${number}"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ ]]
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
