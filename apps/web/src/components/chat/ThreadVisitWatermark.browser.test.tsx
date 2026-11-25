@@ -6,6 +6,7 @@ import { expect, it, vi } from "vite-plus/test";
 
 import { fakeTimers, render } from "../../../test/render";
 import { AppAtomRegistryProvider, appAtomRegistry } from "../../rpc/atomRegistry";
+import { threadReadingAtom, UNREAD_THREAD_READING } from "../../state/threadReading";
 
 const mocks = vi.hoisted(() => ({
   visitRun: vi.fn(),
@@ -48,6 +49,11 @@ function setShell(ref: ScopedThreadRef, updatedAt: string) {
   });
 }
 
+// Showing a thread reads it only once its reader reaches the end, which the timeline reports.
+function readerAtEnd(ref: ScopedThreadRef) {
+  appAtomRegistry.set(threadReadingAtom(ref), { ...UNREAD_THREAD_READING, caughtUp: true });
+}
+
 function visitedThreadIds() {
   return mocks.visitRun.mock.calls.map(
     ([, input]) => (input as { input: { threadId: string } }).input.threadId,
@@ -59,6 +65,8 @@ it("records the visit of the next thread at once after switching threads", async
   mocks.visitRun.mockReturnValue(Effect.void);
   setShell(threadA, "2026-01-02T00:00:00.000Z");
   setShell(threadB, "2026-01-03T00:00:00.000Z");
+  readerAtEnd(threadA);
+  readerAtEnd(threadB);
   using _focus = vi.spyOn(document, "hasFocus").mockReturnValue(true);
   using _timers = fakeTimers();
   vi.setSystemTime(NOW);
@@ -88,6 +96,7 @@ it("does not mark a run that finishes in a background window as seen", async () 
   mocks.visitRun.mockReturnValue(Effect.void);
   const threadC: ScopedThreadRef = { environmentId: ENVIRONMENT, threadId: ThreadId.make("c") };
   setShell(threadC, "2026-01-02T00:00:00.000Z");
+  readerAtEnd(threadC);
   let focused = true;
   let visibility: DocumentVisibilityState = "visible";
   using _focus = vi.spyOn(document, "hasFocus").mockImplementation(() => focused);
