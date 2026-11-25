@@ -93,13 +93,14 @@ export function failoverNoticeText(
         readonly from: string;
         readonly to: string;
         readonly cause: FailoverCause;
+        readonly paid?: boolean;
       }
     | { readonly type: "stop"; readonly from: string; readonly cause: FailoverCause }
     | { readonly type: "resume" | "return"; readonly to: string },
 ): string {
   switch (step.type) {
     case "switch":
-      return `Switched to ${step.to}: ${failoverCauseLabel(step.cause)} on ${step.from}`;
+      return `Switched to ${step.to}${step.paid === true ? " (paid API account)" : ""}: ${failoverCauseLabel(step.cause)} on ${step.from}`;
     case "stop":
       return `Failover stopped: ${failoverCauseLabel(step.cause)} on ${step.from}, and no other account is usable`;
     case "resume":
@@ -198,6 +199,16 @@ export type FailoverRun = Pick<
 export interface InstanceHealth {
   /** Enabled, installed and not reporting itself signed out. */
   readonly usable: boolean;
+  /** Bills per request (API key, Bedrock, Vertex) instead of a subscription. */
+  readonly paid?: boolean;
+}
+
+const PAID_AUTH_TYPES = new Set(["apikey", "api_key", "api-key", "bedrock", "vertex"]);
+
+/** An instance billed per request, which failover only moves a thread to when allowed. */
+export function isPaidProvider(provider: Pick<ServerProvider, "auth">): boolean {
+  const type = provider.auth.type?.toLowerCase();
+  return type !== undefined && PAID_AUTH_TYPES.has(type);
 }
 
 export interface FailoverInput {
@@ -217,6 +228,8 @@ export interface FailoverInput {
   /** Instance id -> epoch ms until which its usage reading shows a full window (usageExhaustedUntilMs). */
   readonly usageExhaustedUntil: ReadonlyMap<string, number>;
   readonly nowMs: number;
+  /** providerFailoverAllowPaid: paid instances count as targets only when set. */
+  readonly allowPaid?: boolean;
 }
 
 export type FailoverDecision =
@@ -250,9 +263,14 @@ export type FailoverDecision =
 
 function isInstanceUsable(
   instanceId: string,
-  input: Pick<FailoverInput, "health" | "exhaustedUntil" | "usageExhaustedUntil" | "nowMs">,
+  input: Pick<
+    FailoverInput,
+    "health" | "exhaustedUntil" | "usageExhaustedUntil" | "nowMs" | "allowPaid"
+  >,
 ): boolean {
-  if (input.health.get(instanceId)?.usable !== true) return false;
+  const health = input.health.get(instanceId);
+  if (health?.usable !== true) return false;
+  if (health.paid === true && input.allowPaid !== true) return false;
   for (const until of [
     input.exhaustedUntil.get(instanceId),
     input.usageExhaustedUntil.get(instanceId),

@@ -1520,6 +1520,11 @@ export const ServerSettings = Schema.Struct({
     ),
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
+  /**
+   * duHell fork: failover may move a thread to a paid API account (API key, Bedrock, Vertex) in the
+   * chain only when this is on. Off (default), such accounts are skipped.
+   */
+  providerFailoverAllowPaid: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   snoozePresets: SnoozePresetSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SNOOZE_PRESETS)),
   ),
@@ -1988,6 +1993,7 @@ export const ServerSettingsPatch = Schema.Struct({
   sidebarAutoSettleOnMerge: Schema.optionalKey(Schema.Boolean),
   autoResumeLimitedThreads: Schema.optionalKey(Schema.Boolean),
   providerFailoverChain: Schema.optionalKey(Schema.Array(Schema.String)),
+  providerFailoverAllowPaid: Schema.optionalKey(Schema.Boolean),
   snoozeLimitedThreads: Schema.optionalKey(Schema.Boolean),
   snoozePresets: Schema.optionalKey(SnoozePresetSettings),
   hiddenThreadTags: Schema.optionalKey(Schema.Array(Schema.String)),

@@ -18,6 +18,7 @@ import {
   failoverCause,
   failoverContinuationMessageId,
   failoverNoticeText,
+  isPaidProvider,
   normalizeFailoverChain,
   providerFailoverDecision,
   usageExhaustedUntilMs,
@@ -522,5 +523,69 @@ describe("providerFailoverDecision", () => {
       );
       assert.equal(decision?.type === "return" ? decision.to : null, "claudeAgent");
     });
+  });
+});
+
+describe("paid API accounts in the chain", () => {
+  const paidApis = new Map([
+    ["claudeAgent", { usable: true }],
+    ["claudeSubB", { usable: true }],
+    ["claudeApiA", { usable: true, paid: true }],
+    ["claudeApiB", { usable: true, paid: true }],
+  ]);
+  const failedOnSecondPlan = {
+    threadInstanceId: ProviderInstanceId.make("claudeSubB"),
+    runs: [
+      run(1, "claudeAgent", "failed", { failure: limit }),
+      run(2, "claudeSubB", "failed", { failure: limit, continues: 1 }),
+    ],
+    health: paidApis,
+  };
+
+  it("stops instead of moving to a paid account without the setting", () => {
+    assert.deepStrictEqual(providerFailoverDecision(input(failedOnSecondPlan)), {
+      type: "stop",
+      failedRunId: RunId.make("run-2"),
+      from: "claudeSubB",
+      cause: "usage_limit",
+      tried: ["claudeAgent", "claudeSubB"],
+    });
+  });
+
+  it("moves to a paid account only when allowed, and says so in the notice", () => {
+    assert.deepStrictEqual(
+      providerFailoverDecision(input({ ...failedOnSecondPlan, allowPaid: true })),
+      {
+        type: "switch",
+        failedRunId: RunId.make("run-2"),
+        from: "claudeSubB",
+        to: "claudeApiA",
+        cause: "usage_limit",
+      },
+    );
+    assert.equal(
+      failoverNoticeText({
+        type: "switch",
+        from: "Second plan",
+        to: "API key",
+        cause: "usage_limit",
+        paid: true,
+      }),
+      "Switched to API key (paid API account): usage limit reached on Second plan",
+    );
+  });
+
+  it("recognises API key, Bedrock and Vertex accounts as paid", () => {
+    const withAuth = (type: string | undefined) =>
+      ({ auth: { status: "authenticated", ...(type === undefined ? {} : { type }) } }) as Pick<
+        ServerProvider,
+        "auth"
+      >;
+    assert.deepStrictEqual(
+      ["apiKey", "api_key", "bedrock", "vertex", "max", "chatgpt", undefined].map((type) =>
+        isPaidProvider(withAuth(type)),
+      ),
+      [true, true, true, true, false, false, false],
+    );
   });
 });

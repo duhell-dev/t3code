@@ -34,6 +34,7 @@ import {
   failoverContinuationMessageId,
   failoverContinuationText,
   failoverNoticeText,
+  isPaidProvider,
   failoverResumeText,
   normalizeFailoverChain,
   providerFailoverDecision,
@@ -129,6 +130,7 @@ const makeSweep = Effect.gen(function* () {
     readonly runs: ReadonlyMap<string, OrchestrationV2Run>;
     readonly modelSelection: OrchestrationV2Run["modelSelection"];
     readonly displayName: (instanceId: string) => string;
+    readonly isPaid: (instanceId: string) => boolean;
   }) {
     const { decision, threadId, displayName } = input;
     if (decision.type === "stop") {
@@ -220,6 +222,7 @@ const makeSweep = Effect.gen(function* () {
           from: displayName(decision.from),
           to: displayName(decision.to),
           cause: decision.cause,
+          paid: input.isPaid(decision.to),
         }),
       });
       const messageId = failoverContinuationMessageId(threadId, decision.failedRunId);
@@ -279,6 +282,7 @@ const makeSweep = Effect.gen(function* () {
           provider.installed &&
           provider.status !== "disabled" &&
           provider.auth.status !== "unauthenticated",
+        paid: isPaidProvider(provider),
       });
     }
     const threadIds = yield* projections.getProviderFailoverThreadIds(
@@ -377,6 +381,7 @@ const makeSweep = Effect.gen(function* () {
         exhaustedUntil,
         usageExhaustedUntil,
         nowMs,
+        allowPaid: preferences.providerFailoverAllowPaid,
       });
       if (decision === null) continue;
       acted = true;
@@ -386,6 +391,7 @@ const makeSweep = Effect.gen(function* () {
         runs: new Map(state.runs.map((run) => [run.id as string, run])),
         modelSelection: state.modelSelection,
         displayName: (instanceId) => providers.get(instanceId)?.displayName ?? instanceId,
+        isPaid: (instanceId) => health.get(instanceId)?.paid === true,
       }).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("orchestration-v2.provider-failover.failed", {
