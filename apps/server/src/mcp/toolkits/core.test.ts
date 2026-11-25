@@ -2,7 +2,7 @@ import * as AssetSigner from "../../assets/AssetSigner.ts";
 import * as DocumentText from "../../provider/DocumentText.ts";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { expect, it } from "@effect/vitest";
+import { expect, it, vi } from "@effect/vitest";
 import {
   DEFAULT_SERVER_SETTINGS,
   ChatImageAttachment,
@@ -1031,6 +1031,102 @@ it.effect("a read-only client reads threads and is refused every write before it
   ),
 );
 const dispatched: Array<string> = [];
+
+it.effect(
+  "schedules a provider change on a busy thread for its next turn, queued messages included",
+  () => {
+    const commands: Array<{ type: string; runId?: string; modelSelection?: unknown }> = [];
+    let busy = true;
+    const released = Deferred.makeUnsafe<void>();
+    const busyThread = ThreadId.make("busy-thread");
+    const previous = { instanceId: "claude", model: "claude-opus-5-5" };
+    const next = { instanceId: "claude-second", model: "claude-opus-5-5" };
+    return Effect.gen(function* () {
+      const server = yield* McpServer.McpServer;
+      const result = yield* server
+        .callTool({
+          name: "t3_thread_configure",
+          arguments: { threadId: busyThread, modelSelection: next },
+        })
+        .pipe(
+          Effect.provideService(
+            McpInvocationContext.McpInvocationContext,
+            clientScope("full-access"),
+          ),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+      expect(result.isError).toBe(false);
+      expect(result.structuredContent).toMatchObject({ deferred: true, queuedMessagesUpdated: 1 });
+      expect(commands).toEqual([
+        { type: "queued-run.edit", runId: "run-queued", modelSelection: next },
+      ]);
+
+      busy = false;
+      yield* Deferred.succeed(released, undefined);
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(commands.map((command) => command.type)).toContain("provider.switch"),
+        ),
+      );
+      expect(commands.at(-1)).toMatchObject({ type: "provider.switch", modelSelection: next });
+    }).pipe(
+      Effect.provide(
+        layerThreadToolkit.pipe(
+          Layer.provideMerge(McpHttpServer.layerInProcessMcpServer),
+          Layer.provide(NodeCrypto.layer),
+          Layer.provide(
+            Layer.mock(ThreadManagement.ThreadManagementService)({
+              getThreadShell: () =>
+                Effect.succeed({ id: busyThread, projectId: "project", deletedAt: null } as never),
+              getProjectThreadRecords: () =>
+                Effect.sync(
+                  () =>
+                    ({
+                      thread: {
+                        id: busyThread,
+                        projectId: "project",
+                        providerInstanceId: "claude",
+                        modelSelection: previous,
+                        runtimeMode: "full-access",
+                        interactionMode: "default",
+                        deletedAt: null,
+                      },
+                      runs: busy
+                        ? [
+                            { id: "run-active", status: "running", ordinal: 1 },
+                            {
+                              id: "run-queued",
+                              status: "queued",
+                              ordinal: 2,
+                              userMessageId: "message-queued",
+                            },
+                          ]
+                        : [{ id: "run-active", status: "completed", ordinal: 1 }],
+                      messages: [{ id: "message-queued", text: "Then the tests" }],
+                    }) as never,
+                ),
+              waitForThread: () =>
+                Deferred.await(released).pipe(
+                  Effect.as({ threadId: busyThread, run: null, timedOut: false }),
+                ),
+              dispatch: (command) =>
+                Effect.sync(() => {
+                  commands.push({
+                    type: command.type,
+                    ...("runId" in command ? { runId: command.runId } : {}),
+                    ...("modelSelection" in command
+                      ? { modelSelection: command.modelSelection }
+                      : {}),
+                  });
+                  return { sequence: commands.length } as never;
+                }),
+            }),
+          ),
+        ),
+      ),
+    );
+  },
+);
 
 it.effect("hides act-as-caller tools from a client caller", () =>
   Effect.gen(function* () {

@@ -1,5 +1,7 @@
 import {
   type CommandId,
+  type ModelSelection,
+  type ProjectId,
   type RuntimeRequestId,
   ThreadId,
   type OrchestrationV2ThreadProjection,
@@ -8,7 +10,8 @@ import {
   type OrchestrationV2Command,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import { modelSelectionCommandType } from "@t3tools/shared/model";
+import * as Duration from "effect/Duration";
+import { modelSelectionCommandType, modelSelectionsEqual } from "@t3tools/shared/model";
 import { topOfPinnedRunOrderKey } from "@t3tools/shared/pinOrderKey";
 
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
@@ -20,7 +23,7 @@ import {
   readThread,
   unavailable,
 } from "../../threadAccess.ts";
-import type * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
+import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ThreadMessageIntake from "../../../orchestration-v2/ThreadMessageIntake.ts";
 import * as ThreadSearch from "../../../orchestration-v2/ThreadSearch.ts";
 import * as ScheduledTasks from "../../../scheduledTasks/ScheduledTaskService.ts";
@@ -42,6 +45,45 @@ function queueEntry(
     truncated: characters.length > limit,
   };
 }
+const PENDING_SELECTION_WAIT_MS = 60_000;
+const PENDING_SELECTION_GIVE_UP = Duration.hours(24);
+
+/**
+ * Applies a provider selection a busy thread could not take yet, once its turn and background work
+ * have ended. It never interrupts them. It gives up when the selection changed meanwhile, which
+ * includes a queued message that already carried it.
+ */
+const applySelectionWhenIdle = Effect.fn("mcp.applySelectionWhenIdle")(function* (
+  threads: Pick<
+    ThreadManagement.ThreadManagementService["Service"],
+    "waitForThread" | "getProjectThreadRecords" | "dispatch"
+  >,
+  target: { readonly projectId: ProjectId; readonly threadId: ThreadId },
+  previous: ModelSelection,
+  next: ModelSelection,
+) {
+  while (true) {
+    yield* threads
+      .waitForThread({ ...target, timeoutMs: PENDING_SELECTION_WAIT_MS })
+      .pipe(Effect.ignore);
+    const projection = yield* threads.getProjectThreadRecords(target, ["runs"], {
+      turnItemTypes: [],
+    });
+    if (!modelSelectionsEqual(projection.thread.modelSelection, previous)) return;
+    if (projection.runs.some(ThreadManagement.isActiveRun)) {
+      yield* Effect.sleep(Duration.seconds(2));
+      continue;
+    }
+    yield* threads.dispatch({
+      type: modelSelectionCommandType(projection.thread.providerInstanceId, next),
+      threadId: target.threadId,
+      commandId: yield* newCommandId(),
+      modelSelection: next,
+    });
+    return;
+  }
+});
+
 const dispatch = Effect.fn("mcp.dispatchThreadCommand")(function* (
   threadId: ThreadId | undefined,
   command: (common: { commandId: CommandId; threadId: ThreadId }) => OrchestrationV2Command,
@@ -233,15 +275,65 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
     writesThread((input) =>
       Effect.gen(function* () {
         const modelSelection = yield* required(input.modelSelection, "modelSelection");
-        const {
+        const { threads, projection } = yield* readThread(input.threadId, ["runs", "messages"]);
+        const { thread } = projection;
+        const queued = queuedRunsInDeliveryOrder(projection);
+        const busy = projection.runs.some(ThreadManagement.isActiveRun) || queued.length > 0;
+        if (!busy) {
+          const type = modelSelectionCommandType(thread.providerInstanceId, modelSelection);
+          const result = yield* threads
+            .dispatch({
+              type,
+              threadId: thread.id,
+              commandId: yield* newCommandId(),
+              modelSelection,
+            })
+            .pipe(Effect.mapError(dispatchFailure));
+          return { sequence: result.sequence };
+        }
+        // Queued messages start their turns on the selection they carry, so they take it now.
+        let queuedMessagesUpdated = 0;
+        for (const run of queued) {
+          const message = projection.messages.find((entry) => entry.id === run.userMessageId);
+          // Completion deliveries and guest messages cannot be edited; they follow the thread.
+          if (
+            message === undefined ||
+            message.delegatedCompletion !== undefined ||
+            message.notification !== undefined ||
+            message.context?.guest !== undefined
+          ) {
+            continue;
+          }
+          yield* threads
+            .dispatch({
+              type: "queued-run.edit",
+              threadId: thread.id,
+              commandId: yield* newCommandId(),
+              runId: run.id,
+              text: message.text,
+              modelSelection,
+            })
+            .pipe(Effect.mapError(dispatchFailure));
+          queuedMessagesUpdated += 1;
+        }
+        yield* applySelectionWhenIdle(
           threads,
-          projection: { thread },
-        } = yield* readThread(input.threadId);
-        const type = modelSelectionCommandType(thread.providerInstanceId, modelSelection);
-        const result = yield* threads
-          .dispatch({ type, threadId: thread.id, commandId: yield* newCommandId(), modelSelection })
-          .pipe(Effect.mapError(dispatchFailure));
-        return { sequence: result.sequence };
+          { projectId: thread.projectId, threadId: thread.id },
+          thread.modelSelection,
+          modelSelection,
+        ).pipe(
+          Effect.timeout(PENDING_SELECTION_GIVE_UP),
+          Effect.catchCause((cause) =>
+            Effect.logWarning("pending provider selection was not applied", { cause }),
+          ),
+          Effect.forkDetach,
+        );
+        return {
+          deferred: true as const,
+          queuedMessagesUpdated,
+          message:
+            "The thread is busy, so the change is scheduled: it applies from the next turn, queued messages included. The running turn and background work keep going on the current provider.",
+        };
       }),
     ),
   ),
