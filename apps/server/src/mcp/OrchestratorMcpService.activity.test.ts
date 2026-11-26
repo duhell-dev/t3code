@@ -11,6 +11,8 @@ import {
   RunAttemptId,
   RunId,
   ScheduledTaskId,
+  SECRET_REQUEST_OUTDATED_CLIENT_NOTE,
+  SECRET_REQUEST_OUTDATED_CLIENT_PLACEHOLDER,
   SECRET_REQUEST_UNSAVED_NOTE,
   ThreadId,
   TurnItemId,
@@ -1582,7 +1584,10 @@ it("requestSecret closes its card when the call is aborted while the card is bei
   expect(statuses).toEqual(["pending", "cancelled"]);
 });
 
-it("requestSecret delivers a fields card as one file per field", async () => {
+const fieldsCardService = (input: {
+  readonly outcome: "saved" | "declined";
+  readonly outdatedClientTried: boolean;
+}) => {
   const dispatched: Array<{
     readonly type: string;
     readonly turnItemId?: string;
@@ -1592,6 +1597,7 @@ it("requestSecret delivers a fields card as one file per field", async () => {
     email: "/home/user/.t3/userdata/secrets/files/0123456789abcdef0123456789abcdef",
     password: "/home/user/.t3/userdata/secrets/files/fedcba9876543210fedcba9876543210",
   };
+  const attemptsTaken: Array<string> = [];
   const projection = () => {
     const card = dispatched.find((command) => command.type === "secret_request.record");
     return {
@@ -1608,7 +1614,7 @@ it("requestSecret delivers a fields card as one file per field", async () => {
       turnItems:
         card === undefined
           ? []
-          : [{ type: "secret_request", id: card.turnItemId, secretStatus: "saved" }],
+          : [{ type: "secret_request", id: card.turnItemId, secretStatus: input.outcome }],
       runtimeRequests: [],
       messages: [],
       contextTransfers: [],
@@ -1632,6 +1638,11 @@ it("requestSecret delivers a fields card as one file per field", async () => {
         Layer.mock(ProjectService.ProjectService)({}),
         Layer.mock(SecretRequests.SecretRequests)({
           saveToFile: () => Effect.succeed({ files }),
+          takeOutdatedClientAttempt: ({ turnItemId }) =>
+            Effect.sync(() => {
+              attemptsTaken.push(turnItemId);
+              return input.outdatedClientTried;
+            }),
         }),
         Layer.mock(RemoteDelegation.RemoteDelegation)({}),
         Layer.mock(ScheduledTaskService.ScheduledTaskService)({}),
@@ -1640,6 +1651,14 @@ it("requestSecret delivers a fields card as one file per field", async () => {
       ),
     ),
   );
+  return { dispatched, files, attemptsTaken, layer };
+};
+
+it("requestSecret delivers a fields card as one file per field", async () => {
+  const { dispatched, files, attemptsTaken, layer } = fieldsCardService({
+    outcome: "saved",
+    outdatedClientTried: false,
+  });
   const fields = [
     { name: "email", label: "Email", secret: false },
     { name: "password", label: "Password" },
@@ -1663,6 +1682,7 @@ it("requestSecret delivers a fields card as one file per field", async () => {
     const result = yield* service.requestSecret(makeScope(), {
       label: "Staging login",
       reason: "Signs in the QA account.",
+      placeholder: "Ignored by apps that show fields",
       fields,
     });
     expect(result).toEqual({ status: "saved", files });
@@ -1671,6 +1691,40 @@ it("requestSecret delivers a fields card as one file per field", async () => {
       secretStatus: "pending",
       delivery: "file",
       fields,
+      // An app from before `fields` shows this in its one input instead of a paste prompt.
+      placeholder: SECRET_REQUEST_OUTDATED_CLIENT_PLACEHOLDER,
     });
+    // The attempt marker is cleared even when the card was saved.
+    expect(attemptsTaken).toHaveLength(1);
   }).pipe(Effect.provide(layer), Effect.runPromise);
+});
+
+it("requestSecret tells the agent when an app too old for fields tried its card", async () => {
+  const fields = [
+    { name: "url", label: "Server", secret: false },
+    { name: "user", label: "User", secret: false },
+    { name: "password", label: "Password" },
+  ];
+  const ask = (outdatedClientTried: boolean) => {
+    const { layer } = fieldsCardService({ outcome: "declined", outdatedClientTried });
+    return Effect.gen(function* () {
+      const service = yield* OrchestratorMcpService.OrchestratorMcpService;
+      return yield* service.requestSecret(makeScope(), {
+        label: "Staging login",
+        reason: "Signs in the QA account.",
+        fields,
+      });
+    }).pipe(Effect.provide(layer), Effect.runPromise);
+  };
+
+  // Declining after the app could not send the values is not a real "no": the agent may ask
+  // again with one card per value, which such an app can answer.
+  expect(await ask(true)).toEqual({
+    status: "declined",
+    note: SECRET_REQUEST_OUTDATED_CLIENT_NOTE,
+  });
+  expect(await ask(false)).toEqual({
+    status: "declined",
+    note: SECRET_REQUEST_UNSAVED_NOTE.declined,
+  });
 });

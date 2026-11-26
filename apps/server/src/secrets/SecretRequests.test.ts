@@ -9,6 +9,7 @@ import {
   SecretProviderId,
   SecretProviderKind,
   SecretRef,
+  SecretRequestAnswerInput,
   ThreadId,
   TurnItemId,
 } from "@t3tools/contracts";
@@ -77,7 +78,11 @@ const withService = <A, E>(
   options: {
     readonly threadId?: ThreadId;
     readonly delivery?: "file";
-    readonly fields?: ReadonlyArray<{ readonly name: string; readonly label: string }>;
+    readonly fields?: ReadonlyArray<{
+      readonly name: string;
+      readonly label: string;
+      readonly secret?: boolean;
+    }>;
     readonly directory?: string;
     readonly runStatus?: string;
     readonly removeFails?: boolean;
@@ -525,9 +530,8 @@ it.effect("a fields request keeps each value apart and delivers one file per fie
         Effect.gen(function* () {
           const answer = (values: Record<string, string>) =>
             service.answer({ threadId, turnItemId, answer: { type: "save", values } });
-          // An older client answers with one secret; a partial answer is just as wrong.
+          // A partial answer or one with an extra value is refused.
           for (const wrong of [
-            service.answer({ threadId, turnItemId, answer: { type: "save", secret: "pw" } }),
             answer({ email: "qa@acme.dev" }),
             answer({ email: "qa@acme.dev", password: "pw", extra: "x" }),
           ]) {
@@ -565,6 +569,83 @@ it.effect("a fields request keeps each value apart and delivers one file per fie
       },
     );
   }).pipe(Effect.provide(NodeServices.layer)),
+);
+
+const decodeAnswerInput = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(SecretRequestAnswerInput),
+);
+
+it.effect("a three-field card answered over the wire saves every value, secret or not", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "secret-files-test-" });
+    yield* withService(
+      ({ service, dispatched }) =>
+        Effect.gen(function* () {
+          // The JSON a current app sends: one value per field name, non-secret fields included.
+          const input = yield* decodeAnswerInput(
+            JSON.stringify({
+              threadId,
+              turnItemId,
+              answer: {
+                type: "save",
+                values: { server: "https://staging.acme.dev", user: "qa", password: "hunter2" },
+              },
+            }),
+          );
+          yield* service.answer(input);
+          assert.include(dispatched[0] as object, { secretStatus: "saved" });
+          const saved = yield* service.saveToFile({ threadId, turnItemId });
+          const files = "files" in saved ? saved.files : assert.fail("expected one file per field");
+          assert.deepEqual(Object.keys(files), ["server", "user", "password"]);
+          assert.equal(yield* fs.readFileString(files.user ?? ""), "qa");
+          assert.isFalse(yield* service.takeOutdatedClientAttempt({ threadId, turnItemId }));
+        }),
+      {
+        delivery: "file",
+        directory,
+        fields: [
+          { name: "server", label: "Server", secret: false },
+          { name: "user", label: "User", secret: false },
+          { name: "password", label: "Password" },
+        ],
+      },
+    );
+  }).pipe(Effect.provide(NodeServices.layer)),
+);
+
+it.effect("an app from before fields is told it is too old, keeps nothing, and is remembered", () =>
+  withService(
+    ({ service, stored, dispatched }) =>
+      Effect.gen(function* () {
+        // What such an app sends: its one input's text as `secret`, or a provider reference.
+        for (const answer of [
+          { type: "save", secret: "hunter2" },
+          { type: "reference", reference: { provider: vault, reference: "fake://github/token" } },
+        ]) {
+          const input = yield* decodeAnswerInput(JSON.stringify({ threadId, turnItemId, answer }));
+          assert.equal((yield* service.answer(input).pipe(Effect.flip)).reason, "client_outdated");
+        }
+        assert.deepEqual(valuesOf(stored), []);
+        assert.deepEqual(dispatched, []);
+        // The card stays open for a current app or the browser, and the agent learns why once.
+        assert.isTrue(yield* service.takeOutdatedClientAttempt({ threadId, turnItemId }));
+        assert.isFalse(yield* service.takeOutdatedClientAttempt({ threadId, turnItemId }));
+        yield* service.answer({
+          threadId,
+          turnItemId,
+          answer: { type: "save", values: { email: "qa@acme.dev", password: "pw" } },
+        });
+        assert.include(dispatched[0] as object, { secretStatus: "saved" });
+      }),
+    {
+      delivery: "file",
+      fields: [
+        { name: "email", label: "Email", secret: false },
+        { name: "password", label: "Password" },
+      ],
+    },
+  ),
 );
 
 it.effect("two racing answers to a fields card never mix their values", () =>

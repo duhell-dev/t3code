@@ -65,6 +65,8 @@ import {
   isOrchestrationV2WorkActive,
   latestProviderTurnForAttempt,
   resolveProjectProviderInstanceEnabled,
+  SECRET_REQUEST_OUTDATED_CLIENT_NOTE,
+  SECRET_REQUEST_OUTDATED_CLIENT_PLACEHOLDER,
   SECRET_REQUEST_UNSAVED_NOTE,
 } from "@t3tools/contracts";
 import { getProviderOptionCurrentValue, withLegacyUltracodeEffort } from "@t3tools/shared/model";
@@ -2712,7 +2714,13 @@ const make = Effect.gen(function* () {
             label: input.label,
             reason: input.reason,
             ...(input.url === undefined ? {} : { url: input.url }),
-            ...(input.placeholder === undefined ? {} : { placeholder: input.placeholder }),
+            // Current apps show each field's own placeholder; one from before `fields` shows
+            // this one in its single input, so the user sees why the card can't be sent there.
+            ...(input.fields !== undefined
+              ? { placeholder: SECRET_REQUEST_OUTDATED_CLIENT_PLACEHOLDER }
+              : input.placeholder === undefined
+                ? {}
+                : { placeholder: input.placeholder }),
             ...(delivery === "file" ? { delivery: "file" as const } : {}),
             ...(input.fields === undefined ? {} : { fields: input.fields }),
             secretStatus,
@@ -2804,7 +2812,20 @@ const make = Effect.gen(function* () {
             );
       yield* Effect.annotateCurrentSpan({ "secret_request.status": status });
       yield* Metrics.increment(Metrics.secretRequestsTotal, { status });
-      if (status !== "saved") return { status, note: SECRET_REQUEST_UNSAVED_NOTE[status] };
+      const outdatedClientTried =
+        input.fields !== undefined &&
+        (yield* secretRequests.takeOutdatedClientAttempt({ threadId, turnItemId }));
+      if (outdatedClientTried) {
+        yield* Effect.annotateCurrentSpan({ "secret_request.outdated_client": true });
+      }
+      if (status !== "saved") {
+        return {
+          status,
+          note: outdatedClientTried
+            ? SECRET_REQUEST_OUTDATED_CLIENT_NOTE
+            : SECRET_REQUEST_UNSAVED_NOTE[status],
+        };
+      }
       if (delivery === "file") {
         const saved = yield* secretRequests
           .saveToFile({ threadId, turnItemId })

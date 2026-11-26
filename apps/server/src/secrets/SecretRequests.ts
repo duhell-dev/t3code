@@ -73,6 +73,14 @@ export class SecretRequests extends Context.Service<
   SecretRequests,
   {
     readonly answer: (input: SecretRequestAnswerInput) => Effect.Effect<void, SecretRequestError>;
+    /**
+     * Whether an app too old for `fields` tried to answer this card. Read once: the entry is
+     * dropped, so call it when the card has ended.
+     */
+    readonly takeOutdatedClientAttempt: (input: {
+      readonly threadId: ThreadId;
+      readonly turnItemId: string;
+    }) => Effect.Effect<boolean>;
     readonly savedRef: (input: {
       readonly threadId: ThreadId;
       readonly turnItemId: string;
@@ -154,6 +162,9 @@ const make = Effect.gen(function* () {
   // One answer at a time: fields are stored one by one, so two racing answers could otherwise
   // each keep some of their values on one card.
   const answerLock = yield* Semaphore.make(1);
+  // Cards an app from before `fields` tried to answer, so the agent can be told why none came.
+  const outdatedClientAttempts = new Set<string>();
+  const attemptKey = (threadId: ThreadId, turnItemId: string) => `${threadId}\u0000${turnItemId}`;
   const answer: SecretRequests["Service"]["answer"] = Effect.fn("SecretRequests.answer")(function* (
     input,
   ) {
@@ -177,6 +188,16 @@ const make = Effect.gen(function* () {
     const run = records.runs.find((candidate) => candidate.id === item.runId);
     if (run === undefined || ThreadManagementService.isTerminalRunStatus(run.status)) {
       return yield* new SecretRequestError({ reason: "agent_stopped" });
+    }
+    // An app from before `fields` shows one input and sends that one value (or a reference)
+    // for every card. Current apps always answer a fields card with `values`.
+    if (
+      item.fields !== undefined &&
+      (input.answer.type === "reference" || "secret" in input.answer)
+    ) {
+      outdatedClientAttempts.add(attemptKey(input.threadId, item.id));
+      yield* Effect.annotateCurrentSpan({ "secret_request.outdated_client": true });
+      return yield* new SecretRequestError({ reason: "client_outdated" });
     }
     // Create before recording so racing answers cannot overwrite values or show saved before storage.
     // Existing values on pending cards finish earlier saves whose recording failed.
@@ -249,6 +270,11 @@ const make = Effect.gen(function* () {
       return yield* new SecretRequestError({ reason: "agent_stopped" });
     }
   }, answerLock.withPermits(1));
+
+  const takeOutdatedClientAttempt: SecretRequests["Service"]["takeOutdatedClientAttempt"] = (
+    input,
+  ) =>
+    Effect.sync(() => outdatedClientAttempts.delete(attemptKey(input.threadId, input.turnItemId)));
 
   const savedRef: SecretRequests["Service"]["savedRef"] = Effect.fn("SecretRequests.savedRef")(
     function* (input) {
@@ -444,7 +470,14 @@ const make = Effect.gen(function* () {
     Effect.forkScoped,
   );
 
-  return SecretRequests.of({ answer, savedRef, consume, saveToFile, savePasted });
+  return SecretRequests.of({
+    answer,
+    takeOutdatedClientAttempt,
+    savedRef,
+    consume,
+    saveToFile,
+    savePasted,
+  });
 });
 
 export const layer = Layer.effect(SecretRequests, make);

@@ -42,11 +42,27 @@ export const SECRET_REQUEST_UNSAVED_NOTE = {
     "No answer in time. Don't ask in chat; ask again with a new clientRequestId only if it is still needed.",
 } as const;
 
+/**
+ * What the agent reads when an app too old for `fields` tried its card, which then ended
+ * without values. Such an app shows one input and can only send one value.
+ */
+export const SECRET_REQUEST_OUTDATED_CLIENT_NOTE =
+  "The user's app is too old for a card with `fields` and could not send the values. Ask again with a new clientRequestId and one request_secret per value, without `fields`, or ask the user to update the app or answer in the browser.";
+
+/**
+ * The top-level placeholder of a card with `fields`. Current apps show the fields' own
+ * placeholders; an app from before `fields` shows one input with this text in it.
+ */
+export const SECRET_REQUEST_OUTDATED_CLIENT_PLACEHOLDER =
+  "Update the app to fill in this card, or answer it in the browser";
+
 const SECRET_REQUEST_FAILURE_MESSAGES = {
   load_failed: "Could not load the secret request.",
   not_found: "This secret request no longer exists.",
   already_answered: "This secret request was already answered.",
   fields_mismatch: "This request asks for different values. Update the app and try again.",
+  client_outdated:
+    "This app version can't fill in a card with several values. Update the app, or answer this card in the browser.",
   agent_stopped: "The agent that asked has stopped, so this secret can't be used.",
   store_failed: "Could not store the secret.",
   reference_unreadable: "Could not read the secret from the secret provider.",
