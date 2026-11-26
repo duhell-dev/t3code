@@ -44,7 +44,7 @@ import { manualServerUpdateCommand, serverRunsTargetOrNewer } from "~/versionSke
 import { crossesReleaseTrack } from "@t3tools/shared/cliRelease";
 import { Button } from "./ui/button";
 import { toastManager } from "./ui/toast";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { SharedTooltipTrigger } from "./ui/shared-tooltip";
 
 const UPDATE_STAGE_LABELS: Record<ServerUpdateStage, string> = {
   downloading: msg("Downloading…"),
@@ -282,14 +282,12 @@ export function ServerUpdateProgress({
     return (
       <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-destructive" role="alert">
         <span className="size-1.5 shrink-0 rounded-full bg-destructive" aria-hidden="true" />
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <span className="min-w-0 truncate">{serverUpdateFailureText(state, messages)}</span>
-            }
-          />
-          <TooltipPopup side="top">{serverUpdateFailureText(state, messages)}</TooltipPopup>
-        </Tooltip>
+        <SharedTooltipTrigger
+          render={
+            <span className="min-w-0 truncate">{serverUpdateFailureText(state, messages)}</span>
+          }
+          label={serverUpdateFailureText(state, messages)}
+        />
       </div>
     );
   }
@@ -458,26 +456,26 @@ export function ServerUpdateAction({
 
   if (appearance === "icon") {
     return (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              size="icon-xs"
-              variant="ghost-muted"
-              className={className}
-              aria-label={gt("{action} for {serverLabel}", { action: actionLabel, serverLabel })}
-              disabled={manualCommand === null && !canUpdate}
-              onClick={onClick}
-            />
-          }
-        >
-          <CircleArrowUpIcon className="size-3.5" />
-        </TooltipTrigger>
-        <TooltipPopup side="top">
-          {actionLabel}
-          {whatsNew}
-        </TooltipPopup>
-      </Tooltip>
+      <SharedTooltipTrigger
+        render={
+          <Button
+            size="icon-xs"
+            variant="ghost-muted"
+            className={className}
+            aria-label={gt("{action} for {serverLabel}", { action: actionLabel, serverLabel })}
+            disabled={manualCommand === null && !canUpdate}
+            onClick={onClick}
+          />
+        }
+        label={
+          <>
+            {actionLabel}
+            {whatsNew}
+          </>
+        }
+      >
+        <CircleArrowUpIcon className="size-3.5" />
+      </SharedTooltipTrigger>
     );
   }
 
@@ -493,12 +491,7 @@ export function ServerUpdateAction({
     </Button>
   );
   if (whatsNew === null) return button;
-  return (
-    <Tooltip>
-      <TooltipTrigger render={button} />
-      <TooltipPopup side="top">{whatsNew}</TooltipPopup>
-    </Tooltip>
-  );
+  return <SharedTooltipTrigger render={button} label={whatsNew} />;
 }
 
 /** Read the host descriptor's version because the host never delivers server config. */

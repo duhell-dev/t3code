@@ -23,6 +23,8 @@ import {
   readThread,
   unavailable,
 } from "../../threadAccess.ts";
+import { providerOptionDescriptors, refuseAgentModePick } from "../../delegatedTaskModes.ts";
+import * as ProviderRegistry from "../../../provider/ProviderRegistry.ts";
 import * as ThreadManagement from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ThreadMessageIntake from "../../../orchestration-v2/ThreadMessageIntake.ts";
 import * as ThreadSearch from "../../../orchestration-v2/ThreadSearch.ts";
@@ -277,6 +279,18 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
         const modelSelection = yield* required(input.modelSelection, "modelSelection");
         const { threads, projection } = yield* readThread(input.threadId, ["runs", "messages"]);
         const { thread } = projection;
+        const providers = yield* (yield* ProviderRegistry.ProviderRegistry).getProviders;
+        yield* refuseAgentModePick({
+          callerRuntimeMode: (yield* readCaller()).limits.runtimeMode,
+          picked: modelSelection.options,
+          descriptors: providerOptionDescriptors(
+            providers.find((provider) => provider.instanceId === modelSelection.instanceId),
+          ),
+          held:
+            thread.modelSelection.instanceId === modelSelection.instanceId
+              ? thread.modelSelection.options
+              : undefined,
+        });
         const queued = queuedRunsInDeliveryOrder(projection);
         const busy = projection.runs.some(ThreadManagement.isActiveRun) || queued.length > 0;
         if (!busy) {

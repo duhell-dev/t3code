@@ -2525,7 +2525,7 @@ export function buildThreadFeed(
     /** Keys the caches; text comes from `resolve`. */
     readonly locale?: string;
   },
-): ThreadFeedEntry[] {
+): ReadonlyArray<ThreadFeedEntry> {
   // duHell: one row per provider failover step; see client-runtime providerSwitch.
   const visibleTurnItems = foldProviderSwitchItems(turnItems);
   const anchoredMessages = options?.anchoredMessages ?? [];
@@ -2584,6 +2584,8 @@ export function buildThreadFeed(
       restartIndex -= 1;
     }
   }
+  // Unchanged rows rebuild the same feed; returning it keeps the screen's props equal.
+  if (restartIndex !== -1 && previous!.rows === visibleTurnItems) return previous!.feed;
   const restart = restartIndex === -1 ? null : previous!.restarts[restartIndex]!;
   const prefix = restart === null ? [] : previous!.feed.slice(0, restart.feedLength);
   const restarts = restart === null ? [] : previous!.restarts.slice(0, restartIndex + 1);

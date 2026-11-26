@@ -31,10 +31,10 @@ import { m, type MessageResolver } from "~/i18n/messages";
 import { tickTextContent } from "~/lib/tickTextContent";
 import { BackgroundWorkList, type BackgroundWorkRow } from "./BackgroundWorkList";
 import { Button, InlineButton } from "../ui/button";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 import type { ThreadNowItem } from "./ThreadNow";
+import { SharedTooltipTrigger } from "../ui/shared-tooltip";
 
 export function extensionStatusBannerItem(
   statuses: NonNullable<OrchestrationV2ProviderSession["extensionStatuses"]>,
@@ -286,21 +286,19 @@ export function backgroundWorkNowItem(
           />
         )}
         {input.runIsLive ? null : (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <InlineButton disabled={input.stopDisabled} onClick={() => void input.onStop()} />
-              }
-            >
-              {stopLabel}
-            </TooltipTrigger>
-            <TooltipPopup side="top">
+          <SharedTooltipTrigger
+            render={
+              <InlineButton disabled={input.stopDisabled} onClick={() => void input.onStop()} />
+            }
+            label={
               <T>
                 Stops this thread and everything it is waiting on: subagents, delegated tasks, and
                 background commands. Queued messages wait until you send again.
               </T>
-            </TooltipPopup>
-          </Tooltip>
+            }
+          >
+            {stopLabel}
+          </SharedTooltipTrigger>
         )}
       </>
     ),
@@ -321,21 +319,21 @@ export function branchMismatchBannerItem(
 ): ComposerBannerStackItem {
   const { mismatch } = input;
   const branchTooltip = (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <code className="min-w-0 truncate font-medium text-foreground">
-            {mismatch.threadBranch}
-          </code>
-        }
-      />
-      <TooltipPopup side="top">
-        <T>
-          This thread last ran on <Var>{mismatch.threadBranch}</Var>. Sending will continue on{" "}
-          <Var>{mismatch.currentBranch}</Var>.
-        </T>
-      </TooltipPopup>
-    </Tooltip>
+    <SharedTooltipTrigger
+      render={
+        <code className="min-w-0 truncate font-medium text-foreground">
+          {mismatch.threadBranch}
+        </code>
+      }
+      label={
+        <>
+          <T>
+            This thread last ran on <Var>{mismatch.threadBranch}</Var>. Sending will continue on{" "}
+            <Var>{mismatch.currentBranch}</Var>.
+          </T>
+        </>
+      }
+    />
   );
   return {
     id: `branch-mismatch:${input.mismatchKey}`,
