@@ -14,6 +14,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { PrimaryConnectionTarget } from "../connection/model.ts";
 import { v2Now, v2ShellSnapshot, v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
+import { threadKey } from "./entities.ts";
 import { applyShellStreamEvent } from "./shellReducer.ts";
 import { isThreadWorking } from "./threadInbox.ts";
 import {
@@ -483,6 +484,60 @@ describe("v2 thread shell lists", () => {
     registry.dispose();
   });
 
+  it("keeps a pinned task its own row and does not repeat its approval on the parent", () => {
+    const { registry, threads, snapshotAtom } = makeHarness([environmentId, remoteEnvironmentId]);
+    const parent = v2ThreadShell;
+    const task = {
+      ...v2ThreadShell,
+      id: ThreadId.make("remote-pinned-task"),
+      creationSource: "mcp" as const,
+      status: "running" as const,
+      activityRunStatus: "running" as const,
+      delegatedFrom: { environmentId, threadId: parent.id, title: parent.title },
+    };
+    const approval = {
+      id: RuntimeRequestId.make("run-tests"),
+      kind: "command" as const,
+      createdAt: v2Now,
+    };
+    const parentRef = { environmentId, threadId: parent.id };
+    const taskRow = `${remoteEnvironmentId}/${task.id}`;
+    const taskKey = threadKey({ environmentId: remoteEnvironmentId, threadId: task.id });
+    registry.set(snapshotAtom(environmentId), { ...v2ShellSnapshot, threads: [parent] });
+    const disposeNavigation = registry.mount(threads.navigationThreadShellsAtom);
+    const disposeUnderParent = registry.mount(threads.delegatedUnderParentAtom);
+    const disposeParent = registry.mount(threads.threadShellAtom(parentRef));
+    const listed = () =>
+      registry
+        .get(threads.navigationThreadShellsAtom)
+        .map((thread) => `${thread.environmentId}/${thread.id}`);
+    const setTask = (pinnedAt: DateTime.Utc | null) =>
+      registry.set(snapshotAtom(remoteEnvironmentId), {
+        ...v2ShellSnapshot,
+        threads: [{ ...task, pinnedAt, pendingRuntimeRequest: approval }],
+      });
+
+    setTask(null);
+    expect(listed()).toEqual([`${environmentId}/${parent.id}`]);
+    expect(registry.get(threads.delegatedUnderParentAtom).has(taskKey)).toBe(true);
+    expect(registry.get(threads.threadShellAtom(parentRef))?.pendingSubagentRequest).toBe(
+      "approval",
+    );
+
+    setTask(v2Now);
+    expect(listed()).toEqual([`${environmentId}/${parent.id}`, taskRow]);
+    expect(registry.get(threads.delegatedUnderParentAtom).has(taskKey)).toBe(false);
+    // The approval shows on the task's own row only.
+    expect(registry.get(threads.threadShellAtom(parentRef))?.pendingSubagentRequest).toBeNull();
+
+    setTask(null);
+    expect(listed()).toEqual([`${environmentId}/${parent.id}`]);
+    disposeParent();
+    disposeUnderParent();
+    disposeNavigation();
+    registry.dispose();
+  });
+
   it("brings an approval up a chain of tasks across three environments to its root", () => {
     const thirdEnvironmentId = EnvironmentId.make("third-environment-v2");
     const { registry, threads, snapshotAtom } = makeHarness([
@@ -732,6 +787,7 @@ describe("resolveListedAncestorThreadRef", () => {
     lineage: { rootThreadId: ThreadId.make(id), parentThreadId: null, relationshipToParent: null },
     archivedAt: null,
     delegatedFrom: null,
+    pinnedAt: null,
     ...overrides,
   });
   const subagentOf = (id: string, parentId: ThreadId, environment = environmentId) =>
@@ -777,6 +833,20 @@ describe("resolveListedAncestorThreadRef", () => {
 
     expect(rowOf(task.id, environmentId, [parent, task])).toEqual(
       ref(remoteEnvironmentId, parent.id),
+    );
+  });
+
+  it("keeps an open pinned task on its own row", () => {
+    const parent = listed("thread-parent", remoteEnvironmentId);
+    const task = listed("thread-task", environmentId, {
+      delegatedFrom: { environmentId: remoteEnvironmentId, threadId: parent.id, title: "Parent" },
+      pinnedAt: "2026-03-09T10:00:00.000Z",
+    });
+    const helper = subagentOf("thread-helper", task.id);
+
+    expect(rowOf(task.id, environmentId, [parent, task])).toEqual(ref(environmentId, task.id));
+    expect(rowOf(helper.id, environmentId, [parent, task, helper])).toEqual(
+      ref(environmentId, task.id),
     );
   });
 });

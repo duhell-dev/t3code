@@ -10,7 +10,7 @@ import { threadKey } from "./entities.ts";
 
 type FilterableThread = Pick<
   OrchestrationV2ThreadShell,
-  "id" | "lineage" | "tags" | "delegatedFrom"
+  "id" | "lineage" | "tags" | "delegatedFrom" | "pinnedAt"
 >;
 
 export interface TagFilteredEnvironment {
@@ -21,6 +21,13 @@ export interface TagFilteredEnvironment {
 }
 
 export const NO_HIDDEN_THREADS: ReadonlySet<string> = new Set();
+
+/** A pinned delegated task keeps its own row beside a listed parent and stops rolling up to it. */
+export function keepsOwnRowWhenDelegated(thread: {
+  readonly pinnedAt?: string | object | null | undefined;
+}): boolean {
+  return thread.pinnedAt != null;
+}
 
 /** The thread a subagent, side chat or delegated task takes its visibility from, if any. */
 export function visibilityParentKey(
@@ -63,8 +70,8 @@ function hasHiddenTag(
 }
 
 /**
- * Keys of threads the tag filter hides. Children (subagents, side chats, delegated tasks) follow
- * their parent; while any environment hides tags, a child whose parent is not loaded stays hidden.
+ * Keys of threads the tag filter hides. Children follow their parent; while any environment
+ * hides tags, a child whose parent is not loaded stays hidden, unless it is a pinned task.
  * For a partial list such as an archive page, `alreadyHidden` and `loadedElsewhere` give the
  * hidden and loaded keys of live threads, and `hidingAnywhere` the global flag.
  */
@@ -102,7 +109,12 @@ export function hiddenThreadKeys(
       hiddenByKey.set(key, false);
       return false;
     }
-    if (parentKey !== null && !followsParent && hidingAnywhere) {
+    if (
+      parentKey !== null &&
+      !followsParent &&
+      hidingAnywhere &&
+      !(isListedThreadLineage(thread.lineage) && keepsOwnRowWhenDelegated(thread))
+    ) {
       hiddenByKey.set(key, true);
       return true;
     }

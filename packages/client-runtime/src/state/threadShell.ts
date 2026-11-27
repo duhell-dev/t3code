@@ -18,7 +18,11 @@ import { Atom } from "effect/reactivity";
 
 import type { EnvironmentThreadShell, PendingSubagentRequest } from "./models.ts";
 import { presentThreadShell, threadRuntimeIsActive } from "./models.ts";
-import { hiddenThreadKeys, NO_HIDDEN_THREADS } from "./threadTagFilter.ts";
+import {
+  hiddenThreadKeys,
+  keepsOwnRowWhenDelegated,
+  NO_HIDDEN_THREADS,
+} from "./threadTagFilter.ts";
 import { type EnvironmentCatalogState, enabledEnvironmentIds } from "./connections.ts";
 import {
   arrayElementsEqual,
@@ -58,8 +62,8 @@ const isChildRunLive = (thread: Pick<OrchestrationV2ThreadShell, "activityRunSta
 /**
  * Whether a thread shows under its parent rather than in thread lists: a
  * subagent, a side chat, or a task a linked environment delegated here whose parent the
- * client lists (`delegatedUnderParent`, by thread key). A task whose parent
- * the client cannot list stays in the lists, so its work is never out of reach.
+ * client lists (`delegatedUnderParent`, by thread key). A pinned task, or one
+ * whose parent the client cannot list, keeps its own row.
  */
 export function isShownUnderParent(
   ref: ScopedThreadRef,
@@ -76,7 +80,7 @@ export function resolveListedAncestorThreadRef(
   ref: ScopedThreadRef,
   threads: readonly Pick<
     EnvironmentThreadShell,
-    "id" | "environmentId" | "lineage" | "delegatedFrom" | "archivedAt"
+    "id" | "environmentId" | "lineage" | "delegatedFrom" | "archivedAt" | "pinnedAt"
   >[],
 ): ScopedThreadRef {
   const findThread = (target: ScopedThreadRef) =>
@@ -91,7 +95,7 @@ export function resolveListedAncestorThreadRef(
     if (!isListedThreadLineage(thread.lineage)) {
       if (thread.lineage.parentThreadId === null) return ref;
       parent = { environmentId: thread.environmentId, threadId: thread.lineage.parentThreadId };
-    } else if (thread.delegatedFrom != null) {
+    } else if (thread.delegatedFrom != null && !keepsOwnRowWhenDelegated(thread)) {
       parent = {
         environmentId: thread.delegatedFrom.environmentId,
         threadId: thread.delegatedFrom.threadId,
@@ -360,7 +364,14 @@ export function createEnvironmentThreadShellAtoms(input: {
     for (const runsIn of enabledEnvironmentIds(get(input.catalogValueAtom))) {
       for (const thread of get(environmentThreadsAtom(runsIn))) {
         const from = thread.delegatedFrom;
-        if (from === undefined || from.environmentId === runsIn) continue;
+        // A pinned task asks on its own row, so its parent's row does not repeat it.
+        if (
+          from === undefined ||
+          from.environmentId === runsIn ||
+          keepsOwnRowWhenDelegated(thread)
+        ) {
+          continue;
+        }
         const task = { runsIn, thread, parentThreadId: from.threadId };
         const tasks = tasksByDelegator.get(from.environmentId);
         if (tasks === undefined) tasksByDelegator.set(from.environmentId, [task]);
@@ -749,6 +760,7 @@ export function createEnvironmentThreadShellAtoms(input: {
         const parent = thread.delegatedFrom;
         if (
           parent !== undefined &&
+          !keepsOwnRowWhenDelegated(thread) &&
           environmentIds.has(parent.environmentId) &&
           // An archived parent leaves navigation; its task there stays listed on its own.
           get(environmentThreadIndexAtom(parent.environmentId)).get(parent.threadId)?.archivedAt ===

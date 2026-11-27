@@ -1,10 +1,12 @@
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
 import { threadKey } from "./entities.ts";
 import { hiddenThreadKeys, NO_HIDDEN_THREADS, visibleLinkedThreads } from "./threadTagFilter.ts";
 
 const local = EnvironmentId.make("local");
+const pinnedAt = DateTime.makeUnsafe("2026-03-09T10:00:00.000Z");
 const linked = EnvironmentId.make("linked");
 
 const thread = (
@@ -89,6 +91,41 @@ describe("hiddenThreadKeys", () => {
     expect(keys(["private"], null)).toEqual([key(linked, "orphan-task")]);
     expect(keys(null, ["client"])).toEqual([key(linked, "orphan-task")]);
     expect(keys(null, null)).toEqual([]);
+  });
+
+  it("keeps a pinned task whose parent is not loaded, judged by its own tags", () => {
+    const pinned = {
+      ...thread("pinned-task", [], undefined, { environmentId: local, id: "elsewhere" }),
+      pinnedAt,
+    };
+    const pinnedClient = {
+      ...thread("pinned-client-task", ["client"], undefined, {
+        environmentId: local,
+        id: "elsewhere",
+      }),
+      pinnedAt,
+    };
+    const keys = (linkedTags: Array<string> | null) => [
+      ...hiddenThreadKeys([
+        { environmentId: local, threads: [], hiddenTags: ["private"] },
+        { environmentId: linked, threads: [pinned, pinnedClient], hiddenTags: linkedTags },
+      ]),
+    ];
+    expect(keys(null)).toEqual([]);
+    expect(keys(["client"])).toEqual([key(linked, "pinned-client-task")]);
+  });
+
+  it("still hides a pinned task whose loaded parent is hidden", () => {
+    const pinned = {
+      ...thread("pinned-from-private", [], undefined, { environmentId: local, id: "private" }),
+      pinnedAt,
+    };
+    expect([
+      ...hiddenThreadKeys([
+        { environmentId: local, threads: localThreads, hiddenTags: ["private"] },
+        { environmentId: linked, threads: [pinned], hiddenTags: null },
+      ]),
+    ]).toContain(key(linked, "pinned-from-private"));
   });
 
   it("applies each environment's own tags", () => {
