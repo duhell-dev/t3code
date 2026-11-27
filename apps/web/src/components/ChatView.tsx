@@ -101,6 +101,7 @@ import {
   deriveRunlessWorkStartedAt,
   deriveThreadActivityRun,
   deriveLatestThreadRun,
+  deriveShellLatestRun,
   presentProviderStarting,
   deriveThreadStructureRuntime,
   limitRecoveryOwnsSnooze,
@@ -3743,7 +3744,9 @@ export default function ChatView(props: ChatViewProps) {
                   usageLimitRunId={usageLimitRunId}
                   announcedRun={announcedRun(activeActivityRun, serverProjection?.runs ?? [])}
                   detailBehindShell={isDetailBehindShell(
-                    activeLatestRun,
+                    isServerThread && serverProjection !== null
+                      ? deriveShellLatestRun(serverProjection)
+                      : activeLatestRun,
                     activeThreadShell?.latestRun ?? null,
                   )}
                   runningRunId={activeRunningTurnId}

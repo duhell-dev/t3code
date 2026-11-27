@@ -20,11 +20,13 @@ import { createModelCapabilities, createModelSelection } from "@t3tools/shared/m
 import { usageLimitBlockedRun } from "@t3tools/shared/orchestrationV2ThreadError";
 import { describe, expect, it } from "vite-plus/test";
 
+import { isDetailBehindShell } from "./threadActivityAnnouncement.ts";
 import { v2Projection } from "./orchestrationV2TestFixtures.ts";
 import {
   canResumeThread,
   deriveReportedModelSelection,
   deriveLatestThreadRun,
+  deriveShellLatestRun,
   deriveProviderSubagentStatus,
   deriveProviderExtensionStatuses,
   deriveResumableRunId,
@@ -498,6 +500,51 @@ describe("thread execution presentation", () => {
     expect(
       deriveThreadActivityRun({ ...connecting, turnItems: [reasoning] })?.providerStartingLabel,
     ).toBeUndefined();
+  });
+
+  it("keeps a detail whose newest run is an idle compaction in step with its shell", () => {
+    const reply = { ...run("run-reply", 1, "completed"), completedAt: now };
+    const compaction = { ...run("run-compact", 2, "completed"), completedAt: now };
+    const compactMessage = {
+      id: compaction.userMessageId,
+      threadId: v2Projection.thread.id,
+      runId: compaction.id,
+      nodeId: null,
+      role: "user" as const,
+      text: "/compact",
+      attachments: [],
+      streaming: false,
+      createdBy: "agent" as const,
+      creationSource: "server" as const,
+      idleCompaction: "beforeCacheExpires" as const,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const projection = {
+      ...v2Projection,
+      runs: [reply, compaction],
+      messages: [compactMessage],
+      updatedAt: now,
+    };
+    // The server's shell leaves the idle compaction out and presents the reply's run.
+    const shellRun = { runId: reply.id, status: reply.status };
+
+    expect(isDetailBehindShell(deriveShellLatestRun(projection), shellRun)).toBe(false);
+    expect(isDetailBehindShell(deriveShellLatestRun(projection), null)).toBe(false);
+
+    const failedCompaction = {
+      ...projection,
+      turnItems: [
+        {
+          id: TurnItemId.make("compaction-failed"),
+          runId: compaction.id,
+          type: "compaction",
+          status: "failed",
+        } as never,
+      ],
+    };
+    // A failed compaction shows in the shell, so the detail presents it too.
+    expect(deriveShellLatestRun(failedCompaction)?.runId).toBe(compaction.id);
   });
 
   it("presents a held queue as the stopped run instead of queued work", () => {

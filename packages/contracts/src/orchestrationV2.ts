@@ -716,6 +716,39 @@ export function idleCompactionOf(
     : undefined;
 }
 
+/**
+ * Runs of T3 Code's own idle compaction that did not fail. Thread shells leave these out, so
+ * thread lists, notifications and the relay keep presenting the user's last turn.
+ */
+export function silentIdleCompactionRunIds(thread: {
+  readonly runs: ReadonlyArray<{
+    readonly id: string;
+    readonly status: string;
+    readonly userMessageId: string;
+  }>;
+  readonly messages: ReadonlyArray<CompactionMessageFields & { readonly id: string }>;
+  readonly turnItems: ReadonlyArray<{
+    readonly runId: string | null;
+    readonly type: string;
+    readonly status: string;
+  }>;
+}): ReadonlySet<string> {
+  const compactionMessageIds = new Set<string>();
+  for (const message of thread.messages) {
+    if (idleCompactionOf(message) !== undefined) compactionMessageIds.add(message.id);
+  }
+  const silent = new Set<string>();
+  if (compactionMessageIds.size === 0) return silent;
+  for (const run of thread.runs) {
+    if (run.status !== "failed" && compactionMessageIds.has(run.userMessageId)) silent.add(run.id);
+  }
+  for (const item of thread.turnItems) {
+    if (item.type === "compaction" && item.status === "failed" && item.runId !== null)
+      silent.delete(item.runId);
+  }
+  return silent;
+}
+
 export const OrchestrationV2RunStatus = Schema.Literals([
   "preparing",
   "queued",

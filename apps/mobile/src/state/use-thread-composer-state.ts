@@ -21,7 +21,7 @@ import {
   deriveProviderSubagentStatus,
   deriveProviderExtensionStatuses,
   deriveResumableRunId,
-  deriveLatestThreadRun,
+  deriveShellLatestRun,
   deriveRunlessWorkStartedAt,
   deriveThreadActivityRun,
   deriveThreadRuntime,
@@ -375,7 +375,7 @@ export function useThreadComposerState(input: {
     selectedThreadProjection?.projection.runs ?? [],
   );
   const selectedThreadDetailBehindShell = isDetailBehindShell(
-    selectedThreadProjection ? deriveLatestThreadRun(selectedThreadProjection.projection) : null,
+    selectedThreadProjection ? deriveShellLatestRun(selectedThreadProjection.projection) : null,
     selectedThreadShell?.latestRun ?? null,
   );
 

@@ -11,6 +11,7 @@ import {
   isProviderNativeSubagentThread,
   latestProviderTurnForAttempt,
   PROVIDER_DISPLAY_NAMES,
+  silentIdleCompactionRunIds,
   type ModelSelection,
   type ProviderDriverKind,
   type ProviderInstanceId,
@@ -23,6 +24,7 @@ import {
   type ServerProviderModel,
   type OrchestrationV2ExecutionNode,
   type OrchestrationV2LimitRecovery,
+  type OrchestrationV2RunStatus,
   type OrchestrationV2ThreadProjection,
   orchestrationV2RunWorkStartedAt,
   type RunId,
@@ -254,6 +256,27 @@ function presentedLatestRun(
 export function deriveLatestThreadRun(projection: ThreadStructure): ThreadRunSummary | null {
   const run = presentedLatestRun(projection);
   return run === null ? null : summarizeThreadRun(projection, run);
+}
+
+/**
+ * The latest run as the server's thread shell presents it, without T3 Code's own idle
+ * compactions, so a detail compares with its shell (see isDetailBehindShell).
+ */
+export function deriveShellLatestRun(
+  projection: ThreadStructure,
+): { readonly runId: RunId; readonly status: OrchestrationV2RunStatus } | null {
+  const silentRunIds = silentIdleCompactionRunIds(projection);
+  const runs = projection.runs.filter((run) => !silentRunIds.has(run.id));
+  const providerSession = projection.providerSessions.findLast(
+    (session) => session.providerInstanceId === projection.thread.providerInstanceId,
+  );
+  const run =
+    usageLimitRunPresentedAsLatest(
+      runs,
+      projection.turnItems,
+      providerSession?.lastError ?? null,
+    ) ?? latestUnheldRun(runs);
+  return run === null ? null : { runId: run.id, status: run.status };
 }
 
 export function deriveThreadActivityRun(

@@ -58,6 +58,7 @@ import {
   IDLE_COMPACTION_TEXT,
   idleCompactionOf,
   isQueuedProviderThreadPlaceholder,
+  silentIdleCompactionRunIds,
   OrchestrationV2AppThreadJson as OrchestrationV2AppThreadJsonSchema,
   OrchestrationV2CheckpointJson as OrchestrationV2CheckpointJsonSchema,
   OrchestrationV2CheckpointScopeJson as OrchestrationV2CheckpointScopeJsonSchema,
@@ -1891,7 +1892,8 @@ export function threadShellFromProjection(
       )[0] ?? null;
   // T3 Code's own idle compactions stay out of the shell unless they fail, so thread lists,
   // notifications and the relay keep presenting the user's last turn.
-  const runs = projection.runs.filter((run) => !isSilentRunForShell(run, projection));
+  const silentRunIds = silentIdleCompactionRunIds(projection);
+  const runs = projection.runs.filter((run) => !silentRunIds.has(run.id));
   const latestRun =
     usageLimitRunPresentedAsLatest(
       runs,
@@ -2087,21 +2089,6 @@ function activeProviderGoalForShell(
   activeProviderThreadId: OrchestrationV2ThreadProjection["thread"]["activeProviderThreadId"],
 ): OrchestrationV2ThreadShell["goal"] {
   return providerThreads.find((thread) => thread.id === activeProviderThreadId)?.goal ?? null;
-}
-
-function isSilentRunForShell(
-  run: OrchestrationV2ThreadProjection["runs"][number],
-  projection: Pick<OrchestrationV2ThreadProjection, "messages" | "turnItems">,
-): boolean {
-  return (
-    run.status !== "failed" &&
-    projection.messages.some(
-      (message) => message.id === run.userMessageId && idleCompactionOf(message) !== undefined,
-    ) &&
-    !projection.turnItems.some(
-      (item) => item.runId === run.id && item.type === "compaction" && item.status === "failed",
-    )
-  );
 }
 
 const BACKGROUND_WAKE_SOURCE_KINDS = new Set(["background_task", "command", "monitor"]);
@@ -8468,7 +8455,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         )
       )`;
     };
-    // Mirrors isSilentRunForShell.
+    // Mirrors silentIdleCompactionRunIds.
     const isSilentShellRun = (alias: string) => {
       const run = sql.literal(alias);
       return sql`(
