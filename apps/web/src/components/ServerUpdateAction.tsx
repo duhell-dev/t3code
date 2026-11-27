@@ -450,7 +450,7 @@ export function ServerUpdateAction({
             What's new in <Var>{targetVersion}</Var>
           </T>
         </div>
-        <ReleaseHighlightsList highlights={highlights} limit={5} />
+        <ReleaseHighlightsList highlights={highlights} limit={5} expandable={false} />
       </div>
     ) : null;
 

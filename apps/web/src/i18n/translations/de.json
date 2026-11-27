@@ -3342,15 +3342,7 @@
   "3390f0b2396998c0": "Auswahl im Eingabefeld zitieren",
   "e5dc8d61a6d178ed": "Auswahl kürzen",
   "a5b06aaaba1d742f": "Zitieren",
-  "b1d8a5a24bd684e3": "Subagent",
-  "5a805b37d8940816": "Befehl",
-  "da2da87e78bd6b11": "Monitor",
-  "b034f8434dd8479d": "Hintergrundaufgabe",
-  "519dd506361059c9": "Befehl",
-  "b851b1f4c772dea4": "Wartet",
-  "83915f0968cde2cc": "Läuft",
   "b90e87f4b7125237": "Details",
-  "16dc67f5429d8bae": "Hintergrundarbeit",
   "2188eee8f81b0f51": "Subagent öffnen",
   "ec9e0be8ec693302": "Alle Ordner einklappen",
   "b791dd86f7991cc0": "Alle Ordner ausklappen",
@@ -3422,15 +3414,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "1c983a010570cdbb": [
-    "Von einem Agenten auf ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " über eine verknüpfte Umgebung gestartet."
   ],
   "601807baf4e25b94": "Vorschau von {name}",
   "922a18febd2c86d7": "Bildvorschau",
@@ -4189,7 +4172,6 @@
     }
   ],
   "58ac05b9fbce58ce": "Wird gestoppt...",
-  "4bf9327818b58241": "Stoppen",
   "8fe132a05b04a8dc": [
     "Dieser Thread lief zuletzt auf ",
     {
@@ -9188,7 +9170,6 @@
   "1a58c587c585a39e": "Standardmäßiges automatisches Pullen auf Standard zurücksetzen",
   "4f2a1d5aef3f73a5": "Automatisches Pullen auf Aus zurücksetzen",
   "0c8037e10e1354fa": "Standard für automatisches Pullen",
-  "553f7007fe9693e2": "Erkannte Agenten-Credits aus Merge- und Squash-Nachrichten entfernen, sofern der Host das unterstützt; menschliche Co-Autoren bleiben erhalten. Gilt auch für Auto-Merge. Ausgenommen sind Merge-Queues, Stack-Merges und bestehende Commits.",
   "f90a903847ac4a4d": "Entfernen der Agenten-Credits auf Standard zurücksetzen",
   "edf48fd6b2e8f9df": "Agenten-Credits behalten",
   "efb65f53a2382026": "Agenten-Credits beim Mergen entfernen",
@@ -13050,6 +13031,8 @@
   "7f0abaf1ea336b0b": "From {environment}",
   "bb961a3c36fe3ef1": "Started by an agent on {environment} through a linked environment.",
   "ec82041b98853760": "{count, plural, one {and {count} more highlight} other {and {count} more highlights}}",
+  "4f30f0a1207d3706": "{count, plural, one {{count} Neuerung anzeigen} other {Alle {count} Neuerungen anzeigen}}",
+  "052e13e3cd98d073": "Weniger anzeigen",
   "abb7545be0190d7a": [
     "Server already runs ",
     {

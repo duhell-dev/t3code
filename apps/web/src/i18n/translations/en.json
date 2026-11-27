@@ -3341,15 +3341,7 @@
   "3390f0b2396998c0": "Cite selection in composer",
   "e5dc8d61a6d178ed": "Shorten selection",
   "a5b06aaaba1d742f": "Cite",
-  "b1d8a5a24bd684e3": "subagent",
-  "5a805b37d8940816": "command",
-  "da2da87e78bd6b11": "monitor",
-  "b034f8434dd8479d": "background task",
-  "519dd506361059c9": "Command",
-  "b851b1f4c772dea4": "Waiting",
-  "83915f0968cde2cc": "Running",
   "b90e87f4b7125237": "Details",
-  "16dc67f5429d8bae": "Background work",
   "2188eee8f81b0f51": "Open subagent",
   "ec9e0be8ec693302": "Collapse all folders",
   "b791dd86f7991cc0": "Expand all folders",
@@ -3421,15 +3413,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "1c983a010570cdbb": [
-    "Started by an agent on ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " through a linked environment."
   ],
   "601807baf4e25b94": "Preview {name}",
   "922a18febd2c86d7": "Preview image",
@@ -4187,7 +4170,6 @@
     }
   ],
   "58ac05b9fbce58ce": "Stopping...",
-  "4bf9327818b58241": "Stop",
   "8fe132a05b04a8dc": [
     "This thread last ran on ",
     {
@@ -9195,7 +9177,6 @@
   "1a58c587c585a39e": "Reset default automatic pull to default",
   "4f2a1d5aef3f73a5": "Reset automatic pull to off",
   "0c8037e10e1354fa": "Default automatic pull",
-  "553f7007fe9693e2": "Remove recognized agent credit lines from merge and squash messages on hosts that support it, keeping human co-authors. Includes auto-merge. Excludes merge queues, stack merges, and existing commits.",
   "f90a903847ac4a4d": "Reset agent credit removal to default",
   "edf48fd6b2e8f9df": "Keep agent credits",
   "efb65f53a2382026": "Remove agent credits when merging",
@@ -13058,6 +13039,8 @@
   "7f0abaf1ea336b0b": "From {environment}",
   "bb961a3c36fe3ef1": "Started by an agent on {environment} through a linked environment.",
   "ec82041b98853760": "{count, plural, one {and {count} more highlight} other {and {count} more highlights}}",
+  "4f30f0a1207d3706": "{count, plural, one {Show all {count} highlight} other {Show all {count} highlights}}",
+  "052e13e3cd98d073": "Show fewer",
   "abb7545be0190d7a": [
     "Server already runs ",
     {

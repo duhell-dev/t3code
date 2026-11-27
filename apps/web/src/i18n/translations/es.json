@@ -3341,15 +3341,7 @@
   "3390f0b2396998c0": "Citar la selección en el cuadro de mensaje",
   "e5dc8d61a6d178ed": "Acortar selección",
   "a5b06aaaba1d742f": "Citar",
-  "b1d8a5a24bd684e3": "subagente",
-  "5a805b37d8940816": "comando",
-  "da2da87e78bd6b11": "monitor",
-  "b034f8434dd8479d": "tarea en segundo plano",
-  "519dd506361059c9": "Comando",
-  "b851b1f4c772dea4": "Esperando",
-  "83915f0968cde2cc": "En ejecución",
   "b90e87f4b7125237": "Detalles",
-  "16dc67f5429d8bae": "Trabajo en segundo plano",
   "2188eee8f81b0f51": "Abrir subagente",
   "ec9e0be8ec693302": "Contraer todas las carpetas",
   "b791dd86f7991cc0": "Expandir todas las carpetas",
@@ -3421,15 +3413,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "1c983a010570cdbb": [
-    "Iniciado por un agente en ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " a través de un entorno vinculado."
   ],
   "601807baf4e25b94": "Vista previa de {name}",
   "922a18febd2c86d7": "Vista previa de la imagen",
@@ -4185,7 +4168,6 @@
     }
   ],
   "58ac05b9fbce58ce": "Deteniendo...",
-  "4bf9327818b58241": "Detener",
   "8fe132a05b04a8dc": [
     "Este hilo se ejecutó por última vez en ",
     {
@@ -9186,7 +9168,6 @@
   "1a58c587c585a39e": "Restablecer el pull automático predeterminado al valor predeterminado",
   "4f2a1d5aef3f73a5": "Restablecer el pull automático a desactivado",
   "0c8037e10e1354fa": "Pull automático predeterminado",
-  "553f7007fe9693e2": "Quita las líneas de crédito de agentes reconocidas de los mensajes de fusión y squash en los hosts compatibles, manteniendo a los coautores humanos. Incluye la fusión automática. Excluye las colas de fusión, las fusiones de pilas y los commits existentes.",
   "f90a903847ac4a4d": "Restablecer la eliminación de créditos del agente al valor predeterminado",
   "edf48fd6b2e8f9df": "Mantener créditos de agentes",
   "efb65f53a2382026": "Quitar créditos de agentes al fusionar",
@@ -13045,6 +13026,8 @@
   "7f0abaf1ea336b0b": "From {environment}",
   "bb961a3c36fe3ef1": "Started by an agent on {environment} through a linked environment.",
   "ec82041b98853760": "{count, plural, one {and {count} more highlight} other {and {count} more highlights}}",
+  "4f30f0a1207d3706": "{count, plural, one {Mostrar {count} novedad} other {Mostrar las {count} novedades}}",
+  "052e13e3cd98d073": "Mostrar menos",
   "abb7545be0190d7a": [
     "Server already runs ",
     {

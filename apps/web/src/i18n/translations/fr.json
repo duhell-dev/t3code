@@ -3341,15 +3341,7 @@
   "3390f0b2396998c0": "Citer la sélection dans la zone de saisie",
   "e5dc8d61a6d178ed": "Raccourcir la sélection",
   "a5b06aaaba1d742f": "Citer",
-  "b1d8a5a24bd684e3": "sous-agent",
-  "5a805b37d8940816": "commande",
-  "da2da87e78bd6b11": "moniteur",
-  "b034f8434dd8479d": "tâche en arrière-plan",
-  "519dd506361059c9": "Commande",
-  "b851b1f4c772dea4": "En attente",
-  "83915f0968cde2cc": "En cours",
   "b90e87f4b7125237": "Détails",
-  "16dc67f5429d8bae": "Travail en arrière-plan",
   "2188eee8f81b0f51": "Ouvrir le sous-agent",
   "ec9e0be8ec693302": "Réduire tous les dossiers",
   "b791dd86f7991cc0": "Développer tous les dossiers",
@@ -3421,15 +3413,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "1c983a010570cdbb": [
-    "Démarré par un agent sur ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " via un environnement associé."
   ],
   "601807baf4e25b94": "Aperçu de {name}",
   "922a18febd2c86d7": "Aperçu de l’image",
@@ -4186,7 +4169,6 @@
     }
   ],
   "58ac05b9fbce58ce": "Arrêt...",
-  "4bf9327818b58241": "Arrêter",
   "8fe132a05b04a8dc": [
     "Ce fil a tourné pour la dernière fois sur ",
     {
@@ -9188,7 +9170,6 @@
   "1a58c587c585a39e": "Réinitialiser le pull automatique par défaut à la valeur par défaut",
   "4f2a1d5aef3f73a5": "Désactiver le pull automatique",
   "0c8037e10e1354fa": "Pull automatique par défaut",
-  "553f7007fe9693e2": "Retire les lignes de crédit d’agent reconnues des messages de fusion et de squash sur les hébergeurs qui le permettent, en gardant les co-auteurs humains. Inclut la fusion automatique. Exclut les files de fusion, les fusions de pile et les commits existants.",
   "f90a903847ac4a4d": "Réinitialiser la suppression des crédits d’agent à la valeur par défaut",
   "edf48fd6b2e8f9df": "Garder les crédits d’agent",
   "efb65f53a2382026": "Retirer les crédits d’agent lors de la fusion",
@@ -13050,6 +13031,8 @@
   "7f0abaf1ea336b0b": "From {environment}",
   "bb961a3c36fe3ef1": "Started by an agent on {environment} through a linked environment.",
   "ec82041b98853760": "{count, plural, one {and {count} more highlight} other {and {count} more highlights}}",
+  "4f30f0a1207d3706": "{count, plural, one {Afficher {count} nouveauté} other {Afficher les {count} nouveautés}}",
+  "052e13e3cd98d073": "Afficher moins",
   "abb7545be0190d7a": [
     "Server already runs ",
     {

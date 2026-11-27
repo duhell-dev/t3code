@@ -3341,15 +3341,7 @@
   "3390f0b2396998c0": "Citar a seleção no editor de mensagens",
   "e5dc8d61a6d178ed": "Encurtar seleção",
   "a5b06aaaba1d742f": "Citar",
-  "b1d8a5a24bd684e3": "subagente",
-  "5a805b37d8940816": "comando",
-  "da2da87e78bd6b11": "monitor",
-  "b034f8434dd8479d": "tarefa em segundo plano",
-  "519dd506361059c9": "Comando",
-  "b851b1f4c772dea4": "Aguardando",
-  "83915f0968cde2cc": "Executando",
   "b90e87f4b7125237": "Detalhes",
-  "16dc67f5429d8bae": "Trabalho em segundo plano",
   "2188eee8f81b0f51": "Abrir subagente",
   "ec9e0be8ec693302": "Recolher todas as pastas",
   "b791dd86f7991cc0": "Expandir todas as pastas",
@@ -3421,15 +3413,6 @@
       "k": "_gt_value_1",
       "v": "v"
     }
-  ],
-  "1c983a010570cdbb": [
-    "Iniciada por um agente em ",
-    {
-      "i": 1,
-      "k": "_gt_value_1",
-      "v": "v"
-    },
-    " por meio de um ambiente vinculado."
   ],
   "601807baf4e25b94": "Pré-visualizar {name}",
   "922a18febd2c86d7": "Pré-visualizar imagem",
@@ -4186,7 +4169,6 @@
     }
   ],
   "58ac05b9fbce58ce": "Parando...",
-  "4bf9327818b58241": "Parar",
   "8fe132a05b04a8dc": [
     "Esta thread rodou por último em ",
     {
@@ -9187,7 +9169,6 @@
   "1a58c587c585a39e": "Redefinir o pull automático padrão para o padrão",
   "4f2a1d5aef3f73a5": "Redefinir pull automático para desativado",
   "0c8037e10e1354fa": "Pull automático padrão",
-  "553f7007fe9693e2": "Remove as linhas de crédito de agentes reconhecidas das mensagens de merge e squash nos hosts que oferecem suporte, mantendo os coautores humanos. Inclui o auto-merge. Exclui merge queues, merges de stack e commits existentes.",
   "f90a903847ac4a4d": "Redefinir a remoção de créditos de agentes para o padrão",
   "edf48fd6b2e8f9df": "Manter créditos de agentes",
   "efb65f53a2382026": "Remover créditos de agentes ao mesclar",
@@ -13050,6 +13031,8 @@
   "7f0abaf1ea336b0b": "From {environment}",
   "bb961a3c36fe3ef1": "Started by an agent on {environment} through a linked environment.",
   "ec82041b98853760": "{count, plural, one {and {count} more highlight} other {and {count} more highlights}}",
+  "4f30f0a1207d3706": "{count, plural, one {Mostrar {count} novidade} other {Mostrar todas as {count} novidades}}",
+  "052e13e3cd98d073": "Mostrar menos",
   "abb7545be0190d7a": [
     "Server already runs ",
     {

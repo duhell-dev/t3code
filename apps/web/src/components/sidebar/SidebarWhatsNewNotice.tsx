@@ -9,6 +9,7 @@ import { useReleaseHighlights } from "~/state/releaseHighlights";
 import { ReleaseHighlightsList } from "../ReleaseHighlightsList";
 import { Button } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
+import { ScrollArea } from "../ui/scroll-area";
 import { resolveWhatsNew, WHATS_NEW_SEEN_STORAGE_KEY } from "./whatsNew.logic";
 
 const SeenVersionSchema = Schema.NullOr(Schema.String);
@@ -58,7 +59,13 @@ export function SidebarWhatsNewNotice() {
               </div>
               <div className="text-muted-foreground text-xs">{APP_VERSION}</div>
             </div>
-            <ReleaseHighlightsList highlights={highlights} />
+            {/* The popup clips at the window edge; the list scrolls so "Got it" stays in view. */}
+            <ScrollArea
+              scrollFade
+              className="-me-3 w-auto max-h-[min(28rem,calc(var(--available-height)-6.5rem))]"
+            >
+              <ReleaseHighlightsList highlights={highlights} className="pe-3" />
+            </ScrollArea>
             <div className="flex justify-end">
               <Button size="xs" variant="outline" onClick={dismiss}>
                 <T>Got it</T>
