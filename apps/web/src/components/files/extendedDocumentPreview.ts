@@ -8,7 +8,8 @@ import {
 } from "@t3tools/shared/terminalOutput";
 
 import { type OfficeWorkerResult, type NotebookCell } from "./officePreviewProtocol";
-import { PreviewError } from "./previewFailure";
+import { isPreviewError, PreviewError } from "./previewFailure";
+import { officeXmlDecoder } from "./officeArchive";
 import {
   archivePath,
   escape,
@@ -39,9 +40,9 @@ function base64ImageFits(base64: string) {
 function htmlImagesFit(html: string) {
   // HTML attribute entities can obscure a data URL until the client parses it.
   for (const match of decodeHTMLAttribute(html).matchAll(
-    /data:image\/(?:png|jpeg|gif|webp);base64,([a-z\d+/]*={0,2})/gi,
+    /(?<=[\t\n\f\r "'/])src[\t\n\f\r ]*=[\t\n\f\r ]*(["'])[\t\n\f\r ]*data:image\/(?:png|jpeg|gif|webp);base64,([a-z\d+/\t\n\f\r ]*(?:=[\t\n\f\r ]*){0,2})\1|data:image\/(?:png|jpeg|gif|webp);base64,([a-z\d+/]*={0,2})/gi,
   ))
-    if (!base64ImageFits(match[1]!)) return false;
+    if (!base64ImageFits(match[2]?.replaceAll(/[\t\n\f\r ]/g, "") ?? match[3]!)) return false;
   return true;
 }
 async function imageData(archive: JSZip, path: string | null): Promise<string> {
@@ -68,8 +69,10 @@ function boundedMarkup(value: string): string {
 async function odfHtml(
   node: XmlNode,
   archive: JSZip,
+  listStyles: Map<string, XmlNode>,
   imageAlt = "",
   inRepeatedRow = false,
+  list: [string, number] = ["", 0],
 ): Promise<string> {
   if (node.name === "#text") return pipe(text(node), escape, boundedMarkup);
   if (node.name === "text:s" || node.name === "text:tab")
@@ -118,19 +121,38 @@ async function odfHtml(
     node.name === "table:table-row"
       ? Number(node.attrs["table:number-rows-repeated"]) > 1
       : inRepeatedRow;
+  // Sub-lists nest directly in list items; a list in a table cell, frame or note restarts at level 1.
+  const nextList: [string, number] =
+    node.name === "text:list"
+      ? [node.attrs["text:style-name"] || list[0], list[1] + 1]
+      : node.name === "text:list-item" || node.name === "text:list-header"
+        ? list
+        : ["", 0];
   for (const child of node.children)
-    children += await odfHtml(child, archive, childImageAlt, repeatedRow);
+    children += await odfHtml(child, archive, listStyles, childImageAlt, repeatedRow, nextList);
+  const numbered =
+    node.name === "text:list" &&
+    listStyles
+      .get(nextList[0])
+      ?.children.some(
+        (level) =>
+          level.name === "text:list-level-style-number" &&
+          level.attrs["text:level"] === String(nextList[1]) &&
+          !!level.attrs["style:num-format"],
+      );
   const tags: Record<string, string> = {
     "text:p": "p",
     "text:h": "h2",
     "text:span": "span",
-    "text:list": "ul",
+    "text:list": numbered ? "ol" : "ul",
     "text:list-item": "li",
     "table:table": "table",
     "table:table-row": "tr",
     "table:table-cell": "td",
   };
-  const tag = tags[node.name];
+  const level = node.name === "text:h" ? Number(node.attrs["text:outline-level"]) : NaN;
+  const tag =
+    Number.isSafeInteger(level) && level >= 1 ? `h${Math.min(level, 6)}` : tags[node.name];
   if (!tag) return children;
   const count =
     tag === "tr"
@@ -158,9 +180,9 @@ export async function openDocument(
   kind: "odt" | "ods" | "odp",
 ): Promise<OfficeWorkerResult> {
   markupBytes = 0;
-  const source = await archive.file("content.xml")?.async("string");
-  if (!source) throw new PreviewError({ code: "odf-no-content" });
-  const root = parseXml(source);
+  const content = await archive.file("content.xml")?.async("uint8array");
+  if (!content?.length) throw new PreviewError({ code: "odf-no-content" });
+  const root = parseXml(officeXmlDecoder(content).decode(content));
   if (kind === "ods") {
     const tables = find(root, "table:table");
     if (!tables.length || tables.length > 100) throw new PreviewError({ code: "ods-sheet-count" });
@@ -227,11 +249,27 @@ export async function openDocument(
   }
   const pages = kind === "odp" ? find(root, "draw:page") : find(root, "office:text");
   if (!pages.length || pages.length > 500) throw new PreviewError({ code: "odf-page-count" });
+  const listStyles = new Map<string, XmlNode>();
+  if (find(root, "text:list").length) {
+    // Named list styles live in styles.xml; it only decides numbering, so a bad part falls back to bullets.
+    let named: XmlNode[] = [];
+    const styles = await archive.file("styles.xml")?.async("uint8array");
+    try {
+      if (styles?.length)
+        named = find(parseXml(officeXmlDecoder(styles).decode(styles)), "office:styles");
+    } catch (cause) {
+      if (!isPreviewError(cause) && !(cause instanceof RangeError)) throw cause;
+    }
+    for (const style of [...named, root].flatMap((part) =>
+      find(part, "text:list-style", "office:body"),
+    ))
+      if (style.attrs["style:name"]) listStyles.set(style.attrs["style:name"], style);
+  }
   const rendered = [];
   for (const page of pages) {
     rendered.push({
       title: page.attrs["draw:name"] || undefined,
-      html: await odfHtml(page, archive),
+      html: await odfHtml(page, archive, listStyles),
     });
   }
   return { type: "document", navigation: kind === "odp" ? "slide" : "page", pages: rendered };
@@ -385,7 +423,7 @@ export function openRtf(bytes: ArrayBuffer): OfficeWorkerResult {
   let completedLength = 0;
   const finishPage = () => {
     if (pages.length >= 500) throw new PreviewError({ code: "rtf-too-many-pages" });
-    pages.push({ title: undefined, html: `<p>${html}</p>` });
+    pages.push({ title: undefined, html: `<p data-rtf-whitespace>${html}</p>` });
     completedLength += html.length;
     html = "";
   };
