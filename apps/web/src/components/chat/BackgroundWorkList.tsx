@@ -4,12 +4,15 @@ import type {
   OrchestrationV2PendingBackgroundTask,
   ThreadId,
 } from "@t3tools/contracts";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ThreadStructure } from "@t3tools/client-runtime/state/shell";
 import { formatDuration } from "@t3tools/shared/orchestrationTiming";
 import type { ReactNode } from "react";
 
+import { useSideThreadTrigger } from "~/hooks/useSideThreadTrigger";
 import { tickTextContent } from "~/lib/tickTextContent";
 import { useEnvironment } from "~/state/environments";
+import { useLinkedThreadOpener } from "~/state/linkedThreadView";
 import { InlineButton } from "../ui/button";
 import { CommandOutputPanel, useCommandOutputStreaming } from "./CommandOutputPanel";
 import { ShellCommandBlock } from "./ShellCommandBlock";
@@ -22,10 +25,6 @@ export interface BackgroundWorkRow {
   readonly activity: string | null;
   readonly startedAtMs: number | null;
   readonly childThreadId: ThreadId | undefined;
-  /** A delegated task running in a linked environment, which has no thread here. */
-  readonly remoteChild:
-    | { readonly environmentId: EnvironmentId; readonly threadId: ThreadId; readonly label: string }
-    | undefined;
 }
 
 /** Every task the background work line counts, one row each, for its expanded state. */
@@ -34,7 +33,7 @@ export function BackgroundWorkList(props: {
   readonly threadId: ThreadId;
   readonly rows: ReadonlyArray<BackgroundWorkRow>;
   readonly turnItems: ThreadStructure["turnItems"];
-  readonly onOpenThread: (threadId: ThreadId, environmentId?: EnvironmentId) => void;
+  readonly onOpenThread: (threadId: ThreadId) => void;
 }) {
   const gt = useGT();
   const streamsOutput = useCommandOutputStreaming(props.environmentId);
@@ -64,25 +63,33 @@ function BackgroundWorkListRow(props: {
   readonly threadId: ThreadId;
   readonly turnItems: ThreadStructure["turnItems"];
   readonly streamsOutput: boolean;
-  readonly onOpenThread: (threadId: ThreadId, environmentId?: EnvironmentId) => void;
+  readonly onOpenThread: (threadId: ThreadId) => void;
 }) {
   const { row, onOpenThread } = props;
-  const { task, remoteChild } = row;
-  // A linked environment opens only while this client is connected to it.
-  const remoteEnvironment = useEnvironment(remoteChild?.environmentId ?? null);
+  const { task } = row;
   const item = props.turnItems.findLast((candidate) =>
     task.itemId === undefined
-      ? (candidate.nativeItemRef?.nativeId || candidate.id) === task.taskId
+      ? (candidate.nativeItemRef?.nativeId || candidate.id) === (task.nativeItemId ?? task.taskId)
       : candidate.id === task.itemId,
   );
+  // A delegated task running in a linked environment, which has no thread here.
+  const remoteChild =
+    task.kind === "subagent" && item?.type === "subagent" ? item.remoteChild : undefined;
+  const remoteEnvironment = useEnvironment(remoteChild?.environmentId ?? null);
+  const opener = useLinkedThreadOpener(
+    scopeThreadRef(props.environmentId, props.threadId),
+    remoteChild,
+    row.labelText,
+  );
+  const trigger = useSideThreadTrigger();
   const command = task.command ?? (item?.type === "command_execution" ? item.input : undefined);
   const itemId = task.itemId ?? (item?.type === "command_execution" ? item.id : undefined);
   const startedAtMs = row.startedAtMs;
-  const open =
+  const openProps =
     row.childThreadId !== undefined
-      ? () => onOpenThread(row.childThreadId!)
-      : remoteChild !== undefined && remoteEnvironment !== null
-        ? () => onOpenThread(remoteChild.threadId, remoteChild.environmentId)
+      ? { onClick: () => onOpenThread(row.childThreadId!) }
+      : opener
+        ? trigger(opener.open, { panel: opener.mode === "linked" })
         : null;
   return (
     <li className="min-w-0 space-y-1">
@@ -100,8 +107,8 @@ function BackgroundWorkListRow(props: {
             className="shrink-0 tabular-nums"
           />
         )}
-        {open === null ? null : (
-          <InlineButton tone="muted" onClick={open}>
+        {openProps === null ? null : (
+          <InlineButton tone="muted" {...openProps}>
             <T context="verb, opens a background task's thread">Open</T>
           </InlineButton>
         )}

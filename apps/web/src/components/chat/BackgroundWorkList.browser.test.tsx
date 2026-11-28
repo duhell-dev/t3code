@@ -1,5 +1,12 @@
 import "~/index.css";
-import { EnvironmentId, ProviderDriverKind, ThreadId, TurnItemId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  NodeId,
+  ProviderDriverKind,
+  ProviderInstanceId,
+  ThreadId,
+  TurnItemId,
+} from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import { expect, it, vi } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
@@ -130,4 +137,68 @@ it("gives a subagent the same status as the background work line", async () => {
   await expect
     .element(page.getByRole("list", { name: "Background work" }).getByText("Review refactor diffs"))
     .toBeVisible();
+});
+
+it("offers to open a subagent running in a linked environment", async () => {
+  const remoteItemId = TurnItemId.make("subagent-item-1");
+  await using screen = await render(
+    <ThreadNow
+      attention={null}
+      syncPhase={null}
+      goal={null}
+      work={backgroundWorkNowItem({
+        environmentId: EnvironmentId.make("mac"),
+        threadId: ThreadId.make("parent"),
+        tasks: [
+          {
+            taskId: "remote-task",
+            itemId: remoteItemId,
+            kind: "subagent",
+            description: "Implement Anzen",
+          },
+        ],
+        turnItems: [
+          {
+            id: remoteItemId,
+            threadId: ThreadId.make("parent"),
+            runId: null,
+            nodeId: null,
+            providerThreadId: null,
+            providerTurnId: null,
+            nativeItemRef: null,
+            parentItemId: null,
+            ordinal: 1,
+            status: "running",
+            title: "Implement Anzen",
+            startedAt: null,
+            completedAt: null,
+            updatedAt: DateTime.makeUnsafe("2026-11-09T00:00:00Z"),
+            type: "subagent",
+            subagentId: NodeId.make("subagent-1"),
+            origin: "app_owned",
+            driver: ProviderDriverKind.make("remote"),
+            providerInstanceId: ProviderInstanceId.make("remote"),
+            childThreadId: null,
+            remoteChild: {
+              environmentId: EnvironmentId.make("boat"),
+              threadId: ThreadId.make("remote-child"),
+              label: "Boat",
+            },
+            prompt: "",
+            result: null,
+          },
+        ],
+        runIsLive: false,
+        stopDisabled: false,
+        stopping: false,
+        onStop: async () => undefined,
+        onOpenThread: () => undefined,
+      })}
+    />,
+  );
+  // duhell: the row in the expanded list offers Open instead of a button in a Details dialog.
+  await screen.getByRole("button", { name: "Waiting · Implement Anzen" }).click();
+  const list = page.getByRole("list", { name: "Background work" });
+  await expect.element(list.getByText("on Boat")).toBeVisible();
+  await expect.element(list.getByRole("button", { name: "Open", exact: true })).toBeVisible();
 });

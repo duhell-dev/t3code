@@ -206,7 +206,7 @@ export function backgroundWorkNowItem(
     readonly stopDisabled: boolean;
     readonly stopping: boolean;
     readonly onStop: () => Promise<void>;
-    readonly onOpenThread: (threadId: ThreadId, environmentId?: EnvironmentId) => void;
+    readonly onOpenThread: (threadId: ThreadId) => void;
   },
   resolve: MessageResolver = m,
 ): ThreadNowItem | null {
@@ -233,7 +233,6 @@ export function backgroundWorkNowItem(
       activity: subagent?.progress?.replace(/\s+/gu, " ").trim() || null,
       startedAtMs: item?.startedAt ? DateTime.toEpochMillis(item.startedAt) : null,
       childThreadId: task.childThreadId ?? subagent?.childThreadId ?? undefined,
-      remoteChild: subagent?.remoteChild,
     };
   });
   const [only] = rows.length === 1 ? rows : [];
